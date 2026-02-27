@@ -1,0 +1,40 @@
+{
+	"schemaVersion": 1,
+	"id": "dragthings",
+	"version": "1.0.0",
+	"name": "Drag Things",
+	"description": "Adds interactive drag physics to Minecraft — pull, move, and struggle with everything.",
+	"authors": [
+		"Marsterhmm"
+	],
+	"license": "MIT",
+	"icon": "assets/dragthings/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"dragthings.Dragthings"
+		],
+		"client": [
+			"dragthings.DragthingsClient"
+		],
+		"modmenu": [
+			"dragthings.client.ModMenuIntegration"
+		]
+	},
+	"mixins": [
+		"dragthings.mixins.json",
+		{
+			"config": "dragthings.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.3",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"breaks": {
+		"minecraft": ["<1.21.1", ">=1.21.2"]
+	}
+}

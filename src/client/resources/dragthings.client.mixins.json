@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"package": "dragthings.mixin.client",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"CancelInteractWhileDraggingMixin",
+		"RaiseArmWhileDraggingMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
