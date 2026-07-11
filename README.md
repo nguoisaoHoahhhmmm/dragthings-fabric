@@ -47,6 +47,14 @@ You can follow the clip in the gallery category for more information.
 
 ![Requirements](https://cdn.modrinth.com/data/cached_images/1f424fa685692b0fa572fbdfe85ef15a6aeae5e1.png)
 
+<div align="center">
+
+[![Fabric API](https://cdn.modrinth.com/data/cached_images/0905fecb0229c97b28ee35cd0bba4090e621de49_0.webp)](https://modrinth.com/mod/fabric-api) [![Mod Menu](https://cdn.modrinth.com/data/cached_images/921e26d74982fd5df88dc5807bcbdefb3da3518e.png)](https://modrinth.com/mod/modmenu) [![Cloth Config API](https://cdn.modrinth.com/data/cached_images/de6b4ffa89bdcff0fbb408ff81fbaede98f50b1f.png)](https://modrinth.com/mod/cloth-config)
+
+</div>
+
+![Divider7](https://cdn.modrinth.com/data/cached_images/d42ef044051d358f1f0e65577f2845069902bfe1_0.webp)
+
 To run Drag Things smoothly, please ensure you have the following mods installed:
 1. [Fabric API](https://modrinth.com/mod/fabric-api): Core dependency. The mod will not launch without it. 
 2. [Cloth Config API](https://modrinth.com/mod/cloth-config): Required to load and save your custom configuration (like item weights). 
@@ -56,6 +64,7 @@ You can definitely have other things to improve the visual:
 1. [Smooth Glowing Resource Pack](https://modrinth.com/shader/smoother-glowing): Enhances Minecraft's default glowing outline effect, making chained or targeted items look much cleaner and smoother.
 2. [Item Physic Lite](https://modrinth.com/mod/itemphysic-lite): (Highly Recommended) Adds incredibly satisfying 3D physics to dropped items, making the dragging experience feel twice as immersive! 
 
+![Divider7](https://cdn.modrinth.com/data/cached_images/d42ef044051d358f1f0e65577f2845069902bfe1_0.webp)
 
 ![Known Issues](https://cdn.modrinth.com/data/cached_images/720cbd5a7b773247a4fe56280ae8add4636bfc2e_0.webp)
 
@@ -66,6 +75,6 @@ You can definitely have other things to improve the visual:
 - Server-Side Delay: On high-ping multiplayer servers, dragged items might stutter slightly due to network latency.
 - Mod Conflicts: Certain mods that completely overhaul item physics or inventory behavior might cause unexpected item drops.
 
-Found a bug that's not listed here? Feel free to open an issue on my GitHub page
+Found a bug that's not listed here? Feel free to open an issue on my [Github page](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric/issues)
 
 ![Divider5](https://cdn.modrinth.com/data/cached_images/3ac3bec295f9246008fe09ca0c006a7763f227b1.png)
