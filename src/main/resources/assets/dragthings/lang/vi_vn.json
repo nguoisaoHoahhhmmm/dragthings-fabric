@@ -65,4 +65,103 @@
   "text.autoconfig.dragthings.option.ritual.lapisPerRitual.@Tooltip": "Số lượng Lưu Ly tiêu hao cho mỗi lần phù phép cộng hưởng thành công.",
   "key.categories.dragthings": "Drag Things",
   "key.dragthings.add_to_drag": "Thêm vào chuỗi kéo"
+,
+  "text.autoconfig.dragthings.option.ritual.enableSmithingRitual": "Bật cộng hưởng rèn",
+  "text.autoconfig.dragthings.option.ritual.enableSmithingRitual.@Tooltip": "Kéo Bàn Rèn đến gần khuôn rèn, vật phẩm gốc và vật liệu để nâng cấp mà không cần đặt khối.",
+
+  "text.autoconfig.dragthings.option.ritual.smithingRadiusBlocks": "Phạm vi cộng hưởng rèn",
+  "text.autoconfig.dragthings.option.ritual.smithingRadiusBlocks.@Tooltip": "Khoảng cách tối đa (theo khối) giữa Bàn Rèn, khuôn rèn, vật phẩm gốc và vật liệu.",
+
+  "text.autoconfig.dragthings.option.ritual.smithingCooldownTicks": "Thời gian hồi rèn (tick)",
+  "text.autoconfig.dragthings.option.ritual.smithingCooldownTicks.@Tooltip": "Số tick tối thiểu giữa hai lần rèn liên tiếp. 20 tick = 1 giây.",
+
+  "text.autoconfig.dragthings.option.ritual.enableGrindstoneRitual": "Bật cộng hưởng đá mài",
+  "text.autoconfig.dragthings.option.ritual.enableGrindstoneRitual.@Tooltip": "Kéo Đá Mài đến gần vật phẩm được phù phép để xóa phù phép và thu hồi các quả cầu XP.",
+
+  "text.autoconfig.dragthings.option.ritual.grindstoneRadiusBlocks": "Phạm vi cộng hưởng đá mài",
+  "text.autoconfig.dragthings.option.ritual.grindstoneRadiusBlocks.@Tooltip": "Khoảng cách tối đa (theo khối) giữa Đá Mài và vật phẩm được phù phép.",
+
+  "text.autoconfig.dragthings.option.ritual.grindstoneCooldownTicks": "Thời gian hồi đá mài (tick)",
+  "text.autoconfig.dragthings.option.ritual.grindstoneCooldownTicks.@Tooltip": "Số tick tối thiểu giữa hai lần sử dụng Đá Mài. 20 tick = 1 giây.",
+
+  "text.autoconfig.dragthings.option.ritual.enableFurnaceRitual": "Bật cộng hưởng lò nung",
+  "text.autoconfig.dragthings.option.ritual.enableFurnaceRitual.@Tooltip": "Kéo Lò Nung, Lò Cao hoặc Lò Hun Khói đến gần nhiên liệu và nguyên liệu để nung theo thời gian.",
+
+  "text.autoconfig.dragthings.option.ritual.furnaceRadiusBlocks": "Phạm vi cộng hưởng lò nung",
+  "text.autoconfig.dragthings.option.ritual.furnaceRadiusBlocks.@Tooltip": "Khoảng cách tối đa (theo khối) giữa lò, nhiên liệu và nguyên liệu.",
+
+  "text.autoconfig.dragthings.option.ritual.furnaceFuelSearchCooldown": "Thời gian tìm nhiên liệu (tick)",
+  "text.autoconfig.dragthings.option.ritual.furnaceFuelSearchCooldown.@Tooltip": "Tần suất lò tìm nhiên liệu gần đó khi chưa có nhiên liệu. 20 tick = 1 giây.",
+
+  "text.autoconfig.dragthings.option.ritual.enableAnvilRitual": "Bật cộng hưởng đe",
+  "text.autoconfig.dragthings.option.ritual.enableAnvilRitual.@Tooltip": "Kéo Đe đến gần hai vật phẩm và các quả cầu XP để sửa chữa hoặc kết hợp phù phép mà không cần đặt khối.",
+
+  "text.autoconfig.dragthings.option.ritual.anvilRadiusBlocks": "Phạm vi cộng hưởng đe",
+  "text.autoconfig.dragthings.option.ritual.anvilRadiusBlocks.@Tooltip": "Khoảng cách tối đa (theo khối) giữa Đe và các vật phẩm.",
+
+  "text.autoconfig.dragthings.option.ritual.anvilCooldownTicks": "Thời gian hồi đe (tick)",
+  "text.autoconfig.dragthings.option.ritual.anvilCooldownTicks.@Tooltip": "Số tick tối thiểu giữa hai lần sử dụng Đe. 20 tick = 1 giây.",
+
+  "text.autoconfig.dragthings.option.ritual.anvilXpPerLevel": "Chi phí XP mỗi cấp",
+  "text.autoconfig.dragthings.option.ritual.anvilXpPerLevel.@Tooltip": "Lượng XP tiêu hao cho mỗi cấp phù phép hoặc mỗi lần sửa chữa. Vanilla tương đương khoảng 7 XP = 1 cấp ở cấp thấp.",
+
+  "text.autoconfig.dragthings.option.ritual.enableCraftingRitual": "Bật cộng hưởng chế tạo",
+  "text.autoconfig.dragthings.option.ritual.enableCraftingRitual.@Tooltip": "Kéo Bàn Chế Tạo đến gần đúng nguyên liệu để chế tạo mọi công thức không định hình. Không hỗ trợ công thức có bố cục.",
+
+  "text.autoconfig.dragthings.option.ritual.craftingRadiusBlocks": "Phạm vi cộng hưởng chế tạo",
+  "text.autoconfig.dragthings.option.ritual.craftingRadiusBlocks.@Tooltip": "Khoảng cách tối đa (theo khối) giữa Bàn Chế Tạo và các nguyên liệu.",
+
+  "text.autoconfig.dragthings.option.ritual.craftingCooldownTicks": "Thời gian hồi chế tạo (tick)",
+  "text.autoconfig.dragthings.option.ritual.craftingCooldownTicks.@Tooltip": "Số tick tối thiểu giữa hai lần chế tạo liên tiếp. 20 tick = 1 giây.",
+
+  "text.autoconfig.dragthings.option.ritual.enableChestLootRitual": "Bật hút vật phẩm vào rương",
+  "text.autoconfig.dragthings.option.ritual.enableChestLootRitual.@Tooltip": "Kéo Rương đến gần vật phẩm rơi để tự động hút chúng vào kho đồ. Hoạt động với cả Rương và Rương Bẫy.",
+
+  "text.autoconfig.dragthings.option.ritual.chestLootRadiusBlocks": "Phạm vi hút vật phẩm",
+  "text.autoconfig.dragthings.option.ritual.chestLootRadiusBlocks.@Tooltip": "Khoảng cách tối đa (theo khối) để vật phẩm được hút vào rương.",
+
+  "text.autoconfig.dragthings.option.ritual.chestLootCooldownTicks": "Tốc độ hút (tick)",
+  "text.autoconfig.dragthings.option.ritual.chestLootCooldownTicks.@Tooltip": "Số tick giữa mỗi lần hút vật phẩm. Thấp hơn = hút nhanh hơn. 1 = mỗi tick, 20 = mỗi giây.",
+
+  "text.autoconfig.dragthings.option.trail": "Vệt kéo",
+  "text.autoconfig.dragthings.option.chain": "Chuỗi",
+
+  "text.autoconfig.dragthings.option.chain.enableChain": "Bật hiệu ứng chuỗi",
+  "text.autoconfig.dragthings.option.chain.enableChain.@Tooltip": "Hiển thị một dải dây hoặc xích nối từ tay bạn tới vật phẩm đang kéo và các vật phẩm đi theo.",
+
+  "text.autoconfig.dragthings.option.chain.chainWidth": "Độ rộng chuỗi",
+  "text.autoconfig.dragthings.option.chain.chainWidth.@Tooltip": "Độ rộng hiển thị của chuỗi. 3 = rất mỏng, 20 = rất dày. Mặc định: 6.",
+
+  "text.autoconfig.dragthings.option.chain.chainAlpha": "Độ mờ chuỗi (%)",
+  "text.autoconfig.dragthings.option.chain.chainAlpha.@Tooltip": "Độ mờ của chuỗi. Phần cuối luôn mờ dần tự nhiên. (10-100)",
+
+  "text.autoconfig.dragthings.option.chain.chainColor": "Màu chuỗi",
+  "text.autoconfig.dragthings.option.chain.chainColor.@Tooltip": "Màu chuỗi dưới dạng số RGB Hex. Mặc định: 0xC8AA6E (màu dây thừng).",
+
+  "text.autoconfig.dragthings.option.chain.chainSag": "Độ võng chuỗi",
+  "text.autoconfig.dragthings.option.chain.chainSag.@Tooltip": "Độ võng của chuỗi giữa các điểm neo. 0 = thẳng, 40 = võng nhiều. Mặc định: 12.",
+
+  "text.autoconfig.dragthings.option.chain.chainFadeSpeed": "Tốc độ mờ chuỗi",
+  "text.autoconfig.dragthings.option.chain.chainFadeSpeed.@Tooltip": "Tốc độ chuỗi hiện lên khi bắt đầu kéo và mờ đi sau khi thả. (1-30)",
+
+  "text.autoconfig.dragthings.option.trail.enableTrail": "Bật vệt kéo",
+  "text.autoconfig.dragthings.option.trail.enableTrail.@Tooltip": "Hiển thị một vệt hình học mượt phía sau vật phẩm đang kéo.",
+
+  "text.autoconfig.dragthings.option.trail.trailLength": "Độ dài vệt kéo",
+  "text.autoconfig.dragthings.option.trail.trailLength.@Tooltip": "Số lượng vị trí được lưu cho mỗi vật phẩm. Cao hơn = vệt dài và mượt hơn. (8-48)",
+
+  "text.autoconfig.dragthings.option.trail.trailAlpha": "Độ mờ vệt kéo (%)",
+  "text.autoconfig.dragthings.option.trail.trailAlpha.@Tooltip": "Độ mờ ở đầu vệt. Phần cuối luôn mờ dần hoàn toàn. (10-100)",
+
+  "text.autoconfig.dragthings.option.trail.trailColor": "Màu vệt kéo",
+  "text.autoconfig.dragthings.option.trail.trailColor.@Tooltip": "Màu vệt kéo dưới dạng số RGB Hex. Mặc định: 0x8ADCFF (xanh da trời).\nVí dụ: 16777215 = trắng, 16711680 = đỏ, 65535 = xanh ngọc, 16744448 = cam.",
+
+  "text.autoconfig.dragthings.option.trail.trailFadeSpeed": "Tốc độ mờ vệt kéo",
+  "text.autoconfig.dragthings.option.trail.trailFadeSpeed.@Tooltip": "Tốc độ vệt hiện lên khi bắt đầu kéo và mờ đi sau khi thả. Giá trị cao hơn = phản hồi nhanh hơn. (1-30)",
+
+  "text.autoconfig.dragthings.option.trail.trailWidth": "Độ rộng vệt kéo",
+  "text.autoconfig.dragthings.option.trail.trailWidth.@Tooltip": "Độ rộng hiển thị của vệt kéo. 5 = rất mỏng, 40 = rất dày. Mặc định: 12.",
+
+  "text.autoconfig.dragthings.option.enableBlockPlacement": "Đặt khối bằng kéo",
+  "text.autoconfig.dragthings.option.enableBlockPlacement.@Tooltip": "Khi bật: nếu thả một BlockItem trong lúc đang nhìn vào mặt của một khối và di chuyển chậm, khối sẽ được đặt thay vì bị ném. Hãy tắt nếu tính năng này thường xuyên kích hoạt ngoài ý muốn."
 }
