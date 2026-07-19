@@ -1,10 +1,15 @@
 {
 	"required": true,
+	"refmap": "dragthings.refmap.json",
 	"package": "dragthings.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"CancelInteractWhileDraggingMixin",
-		"RaiseArmWhileDraggingMixin"
+		"RaiseArmWhileDraggingMixin",
+		"ScrollInputMixin",
+		"ItemEntityGlowMixin",
+		"ItemEntityScaleMixin",
+		"ItemPhysicLiteScaleMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

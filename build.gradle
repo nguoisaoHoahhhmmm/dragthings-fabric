@@ -17,7 +17,7 @@ base {
 }
 loom {
 	splitEnvironmentSourceSets()
-
+	accessWidenerPath = file("src/main/resources/dragthings.accesswidener")
 	mods {
 		"physicitem" {
 			sourceSet sourceSets.main

@@ -13,30 +13,29 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-
 @Mixin(MultiPlayerGameMode.class)
 public class CancelInteractWhileDraggingMixin {
 
     @Inject(method = "useItemOn", at = @At("HEAD"), cancellable = true)
-    private void cancelBlockInteract(LocalPlayer player, InteractionHand hand,
-                                     BlockHitResult hit,
-                                     CallbackInfoReturnable<InteractionResult> cir) {
+    private void dragthings$cancelBlockInteract(LocalPlayer player, InteractionHand hand,
+                                                BlockHitResult hit,
+                                                CallbackInfoReturnable<InteractionResult> cir) {
         if (ItemDragHandler.isDragging()) {
             cir.setReturnValue(InteractionResult.FAIL);
         }
     }
 
     @Inject(method = "interact", at = @At("HEAD"), cancellable = true)
-    private void cancelEntityInteract(Player player, Entity target, InteractionHand hand,
-                                      CallbackInfoReturnable<InteractionResult> cir) {
+    private void dragthings$cancelEntityInteract(Player player, Entity target, InteractionHand hand,
+                                                 CallbackInfoReturnable<InteractionResult> cir) {
         if (ItemDragHandler.isDragging()) {
             cir.setReturnValue(InteractionResult.FAIL);
         }
     }
 
     @Inject(method = "useItem", at = @At("HEAD"), cancellable = true)
-    private void cancelItemUse(Player player, InteractionHand hand,
-                               CallbackInfoReturnable<InteractionResult> cir) {
+    private void dragthings$cancelItemUse(Player player, InteractionHand hand,
+                                          CallbackInfoReturnable<InteractionResult> cir) {
         if (ItemDragHandler.isDragging()) {
             cir.setReturnValue(InteractionResult.FAIL);
         }

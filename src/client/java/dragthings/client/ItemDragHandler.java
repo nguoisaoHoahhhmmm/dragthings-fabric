@@ -1,18 +1,35 @@
 package dragthings.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import dragthings.client.ChainRenderer;
 import dragthings.Dragthings;
 import dragthings.network.DragItemPayload;
+import dragthings.network.PlaceBlockPayload;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class ItemDragHandler {
@@ -21,19 +38,72 @@ public class ItemDragHandler {
     private static ItemEntity hoveredItem = null;
     private static boolean wasMousePressed = false;
 
+    private static KeyMapping addToDragKey;
+
     private static Vec3 currentVelocity = Vec3.ZERO;
-    private static Vec3 smoothPosition = Vec3.ZERO;
+    private static Vec3 smoothPosition  = Vec3.ZERO;
+    private static Vec3 prevPosition    = Vec3.ZERO;
+    private static Vec3 lastFinalPos    = Vec3.ZERO;
     private static float dragTime = 0f;
     private static int ticksSinceLastSync = 0;
 
+    private static double dynamicDragDistance = -1;
+
+    private static final double SCROLL_STEP    = 0.5;
+    private static final double MIN_DRAG_DIST  = 1.0;
+    private static final double MAX_DRAG_DIST  = 20.0;
+
+    private static final Vec3[] velocityHistory = new Vec3[6];
+    private static int velocityHistoryIndex = 0;
+
+    private static ItemEntity pendingReleaseItem     = null;
+    private static Vec3       pendingReleaseVelocity = Vec3.ZERO;
+
+    private static final List<ItemEntity> followers       = new ArrayList<>();
+    private static final List<Vec3>       followerPos     = new ArrayList<>();
+    private static final List<Vec3>       followerVel     = new ArrayList<>();
+    private static final List<Integer>    followerStuck   = new ArrayList<>();
+    private static final double CHAIN_SPACING = 0.45;
+
+    private static final int    STUCK_TICKS_THRESHOLD = 30;
+    private static final double STUCK_TARGET_DIST     = 0.6;
+    private static final double STUCK_MOVE_EPS        = 0.01;
+
+    private static int dragSoundTick         = 0;
+    private static final int DRAG_SOUND_INTERVAL = 8;
+
+    private static int collisionSoundCooldown = 0;
+    private static final int COLLISION_SOUND_COOLDOWN_TICKS = 5;
+
     public static void init() {
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearDragState());
+        addToDragKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.dragthings.add_to_drag",
+                InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G,
+                "key.categories.dragthings"
+        ));
+
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearAll());
+
+        ScreenEvents.BEFORE_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (isDragging()) {
+                performRelease(client);
+            }
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null || client.level == null) return;
 
-
             DragThingsConfig cfg = DragThingsConfig.get();
+
+            if (pendingReleaseItem != null) {
+                pendingReleaseItem.setDeltaMovement(pendingReleaseVelocity);
+                pendingReleaseItem.setNoGravity(false);
+                pendingReleaseItem.noPhysics = false;
+                pendingReleaseItem     = null;
+                pendingReleaseVelocity = Vec3.ZERO;
+            }
+
+            if (collisionSoundCooldown > 0) collisionSoundCooldown--;
 
             hoveredItem = findLookedAtItem(client, cfg);
             boolean isMousePressed = Minecraft.getInstance().mouseHandler.isRightPressed();
@@ -42,158 +112,574 @@ public class ItemDragHandler {
                 client.options.keyUse.setDown(false);
             }
 
-            // ===== START DRAGGING =====
+            // ── START DRAGGING ────────────────────────────────────────────────
             if (isMousePressed && !wasMousePressed && hoveredItem != null) {
-                draggedItem = hoveredItem;
+                draggedItem   = hoveredItem;
                 smoothPosition = draggedItem.position();
+                prevPosition   = smoothPosition;
+                lastFinalPos   = smoothPosition;
                 currentVelocity = Vec3.ZERO;
                 dragTime = 0f;
                 ticksSinceLastSync = 0;
+                dragSoundTick = 0;
+                velocityHistoryIndex = 0;
+                for (int i = 0; i < velocityHistory.length; i++) velocityHistory[i] = Vec3.ZERO;
+
+                double initialDist = client.player.getEyePosition().distanceTo(draggedItem.position());
+                dynamicDragDistance = Math.max(MIN_DRAG_DIST, Math.min(MAX_DRAG_DIST, initialDist));
 
                 draggedItem.setNoGravity(true);
                 draggedItem.noPhysics = true;
+                draggedItem.setXRot(0f);
+                draggedItem.setYRot(0f);
+
+                if (cfg.enableSound) {
+                    client.level.playLocalSound(
+                            draggedItem.getX(), draggedItem.getY(), draggedItem.getZ(),
+                            SoundEvents.CHORUS_FRUIT_TELEPORT,
+                            SoundSource.PLAYERS, 0.18f, 1.6f, false
+                    );
+                }
+
+                if (cfg.enableParticles) {
+                    DragParticleEffects.spawnBurst(client, draggedItem, 6);
+                }
+
+                followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear();
+                DragParticleEffects.clearTimers();
 
                 if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
+                    // FIX: previously sent a (0,0,0) placeholder here, since this
+                    // packet was assumed to be "registration only". But the server
+                    // unconditionally calls item.setPos(payload.x, y, z) on every
+                    // packet, including this one — so that placeholder actually
+                    // teleported the item to the world origin for one tick, which
+                    // then broke every subsequent server-side distance check
+                    // (item.position() was now garbage, far from the player).
+                    // Send the item's real current position instead — a harmless,
+                    // correct position update rather than a destructive placeholder.
+                    Vec3 startPos = draggedItem.position();
                     ClientPlayNetworking.send(new DragItemPayload(
-                            draggedItem.getId(), 0, 0, 0, true
+                            draggedItem.getId(), startPos.x, startPos.y, startPos.z, true
                     ));
                 }
-                Dragthings.LOGGER.debug("Grabbed item: {}", draggedItem.getItem().getDisplayName().getString());
             }
 
-            if (isMousePressed && draggedItem != null) {
-                dragTime += 0.05f;
-                ticksSinceLastSync++;
+            // ── ADD TO DRAG (manual, one at a time) ────────────────────────────
+            if (isDragging() && addToDragKey.consumeClick()) {
+                int maxFollowers = cfg.maxDragCount - 1;
+                if (hoveredItem != null
+                        && hoveredItem != draggedItem
+                        && !followers.contains(hoveredItem)
+                        && followers.size() < maxFollowers) {
 
-                Vec3 targetPos = getTargetPosition(client, cfg);
-                Vec3 toTarget = targetPos.subtract(smoothPosition);
-                double distance = toTarget.length();
+                    followers.add(hoveredItem);
+                    followerPos.add(hoveredItem.position());
+                    followerVel.add(Vec3.ZERO);
+                    followerStuck.add(0);
 
-                double adaptiveFactor = Math.min(distance / 1.5, 1.0);
-                Vec3 springForce = toTarget.normalize()
-                        .scale(cfg.getDragForce() * adaptiveFactor * distance);
+                    hoveredItem.setNoGravity(true);
+                    hoveredItem.noPhysics = true;
+                    hoveredItem.setXRot(0f);
+                    hoveredItem.setYRot(0f);
+                    if (cfg.showOutline) hoveredItem.setGlowingTag(false);
 
-                currentVelocity = currentVelocity.add(springForce);
-                currentVelocity = currentVelocity.scale(cfg.getFriction());
+                    if (cfg.enableSound) {
+                        client.level.playLocalSound(
+                                hoveredItem.getX(), hoveredItem.getY(), hoveredItem.getZ(),
+                                SoundEvents.CHORUS_FRUIT_TELEPORT,
+                                SoundSource.PLAYERS, 0.15f, 1.8f, false
+                        );
+                    }
+                    if (cfg.enableParticles) DragParticleEffects.spawnBurst(client, hoveredItem, 4);
 
-                double speed = currentVelocity.length();
-                if (speed > cfg.getMaxVelocity()) {
-                    currentVelocity = currentVelocity.normalize().scale(cfg.getMaxVelocity());
-                }
-
-                if (distance < 0.15) {
-                    currentVelocity = Vec3.ZERO;
-                    smoothPosition = targetPos;
-                } else if (distance < 0.4) {
-                    currentVelocity = currentVelocity.scale(0.2);
-                }
-
-                smoothPosition = smoothPosition.add(currentVelocity);
-                smoothPosition = lerpVec3(smoothPosition, targetPos, cfg.getLerpSpeed() * 0.3);
-
-                double bobbingOffset = Math.sin(dragTime * 2.0) * cfg.getBobbingAmount();
-                Vec3 finalPos = smoothPosition.add(0, bobbingOffset, 0);
-                finalPos = clampToGround(client, finalPos);
-
-                draggedItem.setNoGravity(true);
-                draggedItem.noPhysics = true;
-                draggedItem.setOnGround(false);
-                draggedItem.setDeltaMovement(Vec3.ZERO);
-                draggedItem.setPos(finalPos.x, finalPos.y, finalPos.z);
-
-                if (ticksSinceLastSync >= 3) {
                     if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
+                        // FIX: same (0,0,0) teleport bug as the leader's start
+                        // packet above — send the follower's real position.
+                        Vec3 followerStartPos = hoveredItem.position();
                         ClientPlayNetworking.send(new DragItemPayload(
-                                draggedItem.getId(),
-                                finalPos.x, finalPos.y, finalPos.z,
+                                hoveredItem.getId(),
+                                followerStartPos.x, followerStartPos.y, followerStartPos.z,
                                 true
                         ));
                     }
-                    ticksSinceLastSync = 0;
                 }
             }
 
-            // ===== RELEASE =====
+            // ── DRAGGING ──────────────────────────────────────────────────────
+            if (isMousePressed && draggedItem != null) {
+                if (!draggedItem.isAlive()) {
+                    performRelease(client);
+                    wasMousePressed = isMousePressed;
+                    return;
+                }
+                for (int fi = followers.size() - 1; fi >= 0; fi--) {
+                    if (!followers.get(fi).isAlive()) {
+                        followers.get(fi).setNoGravity(false);
+                        followers.get(fi).noPhysics = false;
+                        followers.remove(fi);
+                        followerPos.remove(fi);
+                        followerVel.remove(fi);
+                        followerStuck.remove(fi);
+                    }
+                }
+                dragTime += 0.05f;
+                ticksSinceLastSync++;
+                dragSoundTick++;
+
+                Vec3 targetPos = getTargetPosition(client, cfg);
+                Vec3 toTarget  = targetPos.subtract(smoothPosition);
+                double distance = toTarget.length();
+
+                float weight = cfg.getWeightMultiplier(draggedItem.getItem());
+                double invWeight = 1.0 / weight;
+
+                double k = cfg.getDragForce() * invWeight * (0.4 + 0.6 * Math.tanh(distance * 1.2));
+                double c = 2.0 * Math.sqrt(k);
+
+                Vec3 springForce  = distance > 0.001 ? toTarget.scale(k) : Vec3.ZERO;
+                Vec3 dampingForce = currentVelocity.scale(-c);
+                currentVelocity   = currentVelocity.add(springForce.add(dampingForce).scale(0.05));
+
+                double speed = currentVelocity.length();
+                double velCap = cfg.getMaxVelocity() * invWeight;
+                if (speed > velCap) {
+                    currentVelocity = currentVelocity.normalize().scale(velCap);
+                }
+
+                prevPosition   = smoothPosition;
+                smoothPosition = smoothPosition.add(currentVelocity);
+
+                Vec3 frameVelocity = smoothPosition.subtract(prevPosition);
+                velocityHistory[velocityHistoryIndex % velocityHistory.length] = frameVelocity;
+                velocityHistoryIndex++;
+
+                double bobbingOffset = Math.sin(dragTime * 2.0) * cfg.getBobbingAmount();
+                Vec3 resolvedPos = resolveBlockCollision(
+                        client, prevPosition, smoothPosition.add(0, bobbingOffset, 0));
+                smoothPosition = resolvedPos.subtract(0, bobbingOffset, 0);
+
+                draggedItem.setNoGravity(true);
+                draggedItem.noPhysics = true;
+                draggedItem.setDeltaMovement(Vec3.ZERO);
+                draggedItem.setPos(resolvedPos.x, resolvedPos.y, resolvedPos.z);
+
+                if (cfg.trail.enableTrail) {
+                    double moveSpeed = resolvedPos.distanceTo(lastFinalPos);
+                    if (moveSpeed > 0.02) {
+                        ItemTrailRenderer.tickTrail(draggedItem, followers);
+                    }
+                }
+                lastFinalPos = resolvedPos;
+
+                if (cfg.enableParticles) {
+                    DragParticleEffects.tickDragParticles(client, draggedItem, speed);
+                    for (int fi = 0; fi < followers.size(); fi++) {
+                        double followerSpeed = followerVel.get(fi).length();
+                        DragParticleEffects.tickDragParticles(client, followers.get(fi), followerSpeed);
+                    }
+                }
+
+                if (cfg.enableSound && collisionSoundCooldown == 0) {
+                    boolean clampedX = Math.abs(resolvedPos.x - smoothPosition.x) > 0.01;
+                    boolean clampedY = Math.abs(resolvedPos.y - smoothPosition.y) > 0.01;
+                    boolean clampedZ = Math.abs(resolvedPos.z - smoothPosition.z) > 0.01;
+                    if (clampedX || clampedZ || clampedY) {
+                        playCollisionSound(client, resolvedPos, speed);
+                        collisionSoundCooldown = COLLISION_SOUND_COOLDOWN_TICKS;
+                    }
+                }
+
+                if (cfg.enableSound && dragSoundTick >= DRAG_SOUND_INTERVAL) {
+                    double moveDist = resolvedPos.distanceTo(lastFinalPos);
+                    if (moveDist > 0.02) {
+                        float vol   = (float) Math.min(moveDist * 4.0, 0.12f);
+                        float pitch = 0.8f + (float)(moveDist * 3.0);
+                        pitch = Math.min(pitch, 1.4f);
+                        client.level.playLocalSound(
+                                resolvedPos.x, resolvedPos.y, resolvedPos.z,
+                                SoundEvents.AMETHYST_BLOCK_CHIME,
+                                SoundSource.PLAYERS, vol, pitch, false
+                        );
+                    }
+                    dragSoundTick = 0;
+                }
+
+                Vec3 prevChainPos = resolvedPos;
+                for (int fi = 0; fi < followers.size(); fi++) {
+                    ItemEntity follower = followers.get(fi);
+                    Vec3 fPos = followerPos.get(fi);
+                    Vec3 fVel = followerVel.get(fi);
+
+                    float fWeight = cfg.getWeightMultiplier(follower.getItem());
+                    double fInvWeight = 1.0 / fWeight;
+
+                    Vec3 fToLeader = prevChainPos.subtract(fPos);
+                    double dist    = fToLeader.length();
+                    Vec3 fTarget   = dist > 0.001
+                            ? prevChainPos.subtract(fToLeader.normalize().scale(CHAIN_SPACING))
+                            : fPos;
+
+                    Vec3 fToTarget = fTarget.subtract(fPos);
+                    double fDist   = fToTarget.length();
+                    double fk      = cfg.getDragForce() * fInvWeight * 0.6 * (0.4 + 0.6 * Math.tanh(fDist * 1.2));
+                    double fc      = 2.0 * Math.sqrt(fk);
+                    Vec3 fSpring   = fDist > 0.001 ? fToTarget.scale(fk) : Vec3.ZERO;
+                    Vec3 fDamping  = fVel.scale(-fc);
+                    fVel = fVel.add(fSpring.add(fDamping).scale(0.05));
+                    double fSpeed  = fVel.length();
+                    double fVelCap = cfg.getMaxVelocity() * fInvWeight * 0.8;
+                    if (fSpeed > fVelCap)
+                        fVel = fVel.normalize().scale(fVelCap);
+
+                    Vec3 fTo = fPos.add(fVel);
+
+                    int stuckTicks = followerStuck.get(fi);
+                    double actualMove = fTo.distanceTo(fPos);
+                    boolean farFromTarget = fDist > STUCK_TARGET_DIST;
+                    boolean barelyMoving  = actualMove < STUCK_MOVE_EPS;
+
+                    Vec3 newFPos;
+                    if (farFromTarget && barelyMoving) {
+                        stuckTicks++;
+                    } else {
+                        stuckTicks = 0;
+                    }
+
+                    if (stuckTicks > STUCK_TICKS_THRESHOLD) {
+                        newFPos = fTo;
+                        stuckTicks = 0;
+                    } else {
+                        newFPos = resolveBlockCollision(client, followerPos.get(fi), fTo);
+                    }
+                    followerStuck.set(fi, stuckTicks);
+
+                    followerPos.set(fi, newFPos);
+                    followerVel.set(fi, fVel);
+
+                    follower.setNoGravity(true);
+                    follower.noPhysics = true;
+                    follower.setDeltaMovement(Vec3.ZERO);
+                    follower.setPos(newFPos.x, newFPos.y, newFPos.z);
+
+                    prevChainPos = newFPos;
+                }
+
+                if (ticksSinceLastSync >= 3) {
+                    boolean sneaking = client.player.isShiftKeyDown();
+                    if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
+                        ClientPlayNetworking.send(new DragItemPayload(
+                                draggedItem.getId(), resolvedPos.x, resolvedPos.y, resolvedPos.z, true, sneaking
+                        ));
+                        for (int fi = 0; fi < followers.size(); fi++) {
+                            Vec3 fp = followerPos.get(fi);
+                            ClientPlayNetworking.send(new DragItemPayload(
+                                    followers.get(fi).getId(), fp.x, fp.y, fp.z, true, sneaking
+                            ));
+                        }
+                    }
+                    ticksSinceLastSync = 0;
+                }
+
+                Vec3 handPos = client.player.getEyePosition()
+                        .add(client.player.getLookAngle().scale(0.4));
+                ChainRenderer.update(handPos, draggedItem, followers);
+            }
+
+            // ── RELEASE ───────────────────────────────────────────────────────
             if (!isMousePressed && wasMousePressed && draggedItem != null) {
-                Vec3 currentPos = draggedItem.position();
-
-                Vec3 throwVelocity = currentVelocity.scale(cfg.getThrowMultiplier() * 0.5);
-                double throwSpeed = throwVelocity.length();
-                if (throwSpeed > 0.6) {
-                    throwVelocity = throwVelocity.normalize().scale(0.6);
-                }
-
-                draggedItem.noPhysics = false;
-                draggedItem.setNoGravity(false);
-                draggedItem.setDeltaMovement(throwVelocity);
-
-                if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
-                    ClientPlayNetworking.send(new DragItemPayload(
-                            draggedItem.getId(),
-                            currentPos.x, currentPos.y, currentPos.z,
-                            false
-                    ));
-                }
-
-                Dragthings.LOGGER.debug("Released item, throw speed: {}", String.format("%.2f", throwSpeed));
-                clearDragState();
+                performRelease(client);
             }
 
             wasMousePressed = isMousePressed;
         });
     }
 
+    private static void performRelease(Minecraft client) {
+        if (draggedItem == null) return;
+        DragThingsConfig cfg = DragThingsConfig.get();
 
+        Vec3 currentPos = draggedItem.position();
 
-    private static void clearDragState() {
-        if (draggedItem != null) {
-            draggedItem.noPhysics = false;
-            draggedItem.setNoGravity(false);
+        Vec3 avgVelocity = computeWeightedVelocity();
+        double avgSpeed  = avgVelocity.length();
+
+        if (cfg.enableBlockPlacement
+                && avgSpeed < 0.04
+                && draggedItem.getItem().getItem() instanceof BlockItem
+                && tryPlaceBlock(client, draggedItem, cfg)) {
+            ItemTrailRenderer.stopTrail();
+            ChainRenderer.stop();
+            ItemEntity placed = draggedItem;
+            clearDragState();
+            placed.setGlowingTag(false);
+            return;
         }
-        draggedItem = null;
-        currentVelocity = Vec3.ZERO;
-        dragTime = 0f;
-        ticksSinceLastSync = 0;
-    }
 
-    private static Vec3 clampToGround(Minecraft client, Vec3 pos) {
-        final double ITEM_HALF_H = 0.125;
-        Vec3 to = pos.add(0, -ITEM_HALF_H - 0.05, 0);
+        Vec3 throwVelocity;
+        if (avgSpeed > 0.003) {
+            throwVelocity = avgVelocity.scale(cfg.getThrowMultiplier());
+            double throwSpeed = throwVelocity.length();
+            double cappedSpeed = throwSpeed <= 0.6
+                    ? throwSpeed
+                    : 0.6 + Math.sqrt(throwSpeed - 0.6) * 0.4;
+            throwVelocity = throwSpeed > 0.001
+                    ? throwVelocity.normalize().scale(Math.min(cappedSpeed, 1.4))
+                    : Vec3.ZERO;
+        } else {
+            throwVelocity = Vec3.ZERO;
+        }
 
-        BlockHitResult hit = client.level.clip(new ClipContext(
-                pos, to,
-                ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
-                client.player
-        ));
+        draggedItem.setDeltaMovement(throwVelocity);
+        draggedItem.noPhysics = false;
 
-        if (hit.getType() == HitResult.Type.BLOCK) {
-            double blockTopY = hit.getLocation().y;
-            if (pos.y - ITEM_HALF_H < blockTopY) {
-                return new Vec3(pos.x, blockTopY + ITEM_HALF_H, pos.z);
+        if (cfg.gravityOnRelease || throwVelocity.length() > 0.01) {
+            draggedItem.setNoGravity(true);
+            pendingReleaseItem     = draggedItem;
+            pendingReleaseVelocity = throwVelocity;
+        } else {
+            draggedItem.setNoGravity(true);
+            pendingReleaseItem = null;
+        }
+
+        if (cfg.enableParticles) {
+            int burstCount = avgSpeed > 0.05 ? 10 : 5;
+            DragParticleEffects.spawnBurst(client, draggedItem, burstCount);
+        }
+
+        if (cfg.enableSound && client.level != null) {
+            if (avgSpeed > 0.08) {
+                client.level.playLocalSound(
+                        currentPos.x, currentPos.y, currentPos.z,
+                        SoundEvents.SNOWBALL_THROW,
+                        SoundSource.PLAYERS, 0.25f,
+                        0.9f + (float)(avgSpeed * 2.0), false
+                );
+            } else {
+                client.level.playLocalSound(
+                        currentPos.x, currentPos.y, currentPos.z,
+                        SoundEvents.BUNDLE_DROP_CONTENTS,
+                        SoundSource.PLAYERS, 0.22f, 1.1f, false
+                );
             }
         }
-        return pos;
+
+        if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
+            ClientPlayNetworking.send(new DragItemPayload(
+                    draggedItem.getId(), currentPos.x, currentPos.y, currentPos.z, true
+            ));
+            ClientPlayNetworking.send(new DragItemPayload(
+                    draggedItem.getId(),
+                    currentPos.x, currentPos.y, currentPos.z,
+                    false,
+                    throwVelocity.x, throwVelocity.y, throwVelocity.z, false
+            ));
+        }
+
+        try {
+            for (int fi = 0; fi < followers.size(); fi++) {
+                ItemEntity follower = followers.get(fi);
+                Vec3 fp = followerPos.get(fi);
+
+                float fWeight = cfg.getWeightMultiplier(follower.getItem());
+                double fInvWeight = 1.0 / fWeight;
+                Vec3 followerThrowVel = throwVelocity.scale(0.7 * fInvWeight);
+
+                follower.setDeltaMovement(followerThrowVel);
+                follower.setNoGravity(false);
+                follower.noPhysics = false;
+                follower.setGlowingTag(false);
+
+                if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
+                    ClientPlayNetworking.send(new DragItemPayload(
+                            follower.getId(), fp.x, fp.y, fp.z, true
+                    ));
+                    ClientPlayNetworking.send(new DragItemPayload(
+                            follower.getId(),
+                            fp.x, fp.y, fp.z,
+                            false,
+                            followerThrowVel.x, followerThrowVel.y, followerThrowVel.z, false
+                    ));
+                }
+            }
+        } catch (Exception ex) {
+            Dragthings.LOGGER.warn("Error releasing drag followers", ex);
+        } finally {
+            followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear();
+        }
+
+        Dragthings.LOGGER.debug("Throw spd={}", String.format("%.3f", throwVelocity.length()));
+        ItemEntity released = draggedItem;
+        ItemTrailRenderer.stopTrail();
+        ChainRenderer.stop();
+        clearDragState();
+        released.setGlowingTag(false);
     }
 
-    private static Vec3 lerpVec3(Vec3 from, Vec3 to, double alpha) {
-        return new Vec3(
-                from.x + (to.x - from.x) * alpha,
-                from.y + (to.y - from.y) * alpha,
-                from.z + (to.z - from.z) * alpha
+    private static boolean tryPlaceBlock(Minecraft client, ItemEntity item,
+                                         DragThingsConfig cfg) {
+        if (client.level == null || client.player == null) return false;
+
+        ItemStack stack = item.getItem();
+        if (!(stack.getItem() instanceof BlockItem blockItem)) return false;
+
+        Vec3 eyePos  = client.player.getEyePosition();
+        Vec3 lookVec = client.player.getLookAngle();
+        double range = dynamicDragDistance > 0 ? dynamicDragDistance : cfg.getDragDistance();
+        Vec3 endPos  = eyePos.add(lookVec.scale(range + 1.0));
+
+        net.minecraft.world.phys.BlockHitResult hit = client.level.clip(
+                new net.minecraft.world.level.ClipContext(
+                        eyePos, endPos,
+                        net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                        net.minecraft.world.level.ClipContext.Fluid.NONE,
+                        client.player));
+
+        if (hit.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) return false;
+
+        BlockPos targetPos = hit.getBlockPos().relative(hit.getDirection());
+        Direction face     = hit.getDirection();
+        Vec3 hitLoc        = hit.getLocation();
+
+        float hitX = (float)(hitLoc.x - Math.floor(hitLoc.x));
+        float hitY = (float)(hitLoc.y - Math.floor(hitLoc.y));
+        float hitZ = (float)(hitLoc.z - Math.floor(hitLoc.z));
+
+        BlockHitResult fakeHit = new BlockHitResult(hitLoc, face, targetPos, false);
+
+        BlockPlaceContext ctx = new BlockPlaceContext(
+                client.level, client.player, InteractionHand.MAIN_HAND,
+                stack.copyWithCount(1), fakeHit);
+        BlockState placed = blockItem.getBlock().getStateForPlacement(ctx);
+        if (placed == null) return false;
+        if (!placed.canSurvive(client.level, targetPos)) return false;
+        if (!client.level.getBlockState(targetPos).canBeReplaced(ctx)) return false;
+
+        client.level.setBlock(targetPos, placed, 11);
+        SoundType snd = placed.getSoundType();
+        client.level.playLocalSound(
+                targetPos.getX() + 0.5, targetPos.getY() + 0.5, targetPos.getZ() + 0.5,
+                snd.getPlaceSound(), SoundSource.BLOCKS,
+                (snd.getVolume() + 1f) / 2f, snd.getPitch() * 0.8f, false);
+
+        item.discard();
+
+        if (ClientPlayNetworking.canSend(PlaceBlockPayload.TYPE)) {
+            ClientPlayNetworking.send(
+                    new PlaceBlockPayload(item.getId(), targetPos, face, hitX, hitY, hitZ));
+        }
+
+        Dragthings.LOGGER.debug("Block placed: {} @ {}", placed.getBlock(), targetPos);
+        return true;
+    }
+
+    public static boolean handleScroll(double scrollDelta) {
+        if (!isDragging()) return false;
+        DragThingsConfig cfg = DragThingsConfig.get();
+        if (dynamicDragDistance < 0) dynamicDragDistance = cfg.getDragDistance();
+        dynamicDragDistance += scrollDelta * SCROLL_STEP;
+        dynamicDragDistance = Math.max(MIN_DRAG_DIST, Math.min(MAX_DRAG_DIST, dynamicDragDistance));
+        return true;
+    }
+
+    private static void playCollisionSound(Minecraft client, Vec3 pos, double speed) {
+        BlockPos blockPos = BlockPos.containing(pos.x, pos.y - 0.2, pos.z);
+        BlockState state  = client.level.getBlockState(blockPos);
+        SoundType snd     = state.getSoundType();
+
+        float vol   = (float) Math.min(speed * 0.8, 0.15f);
+        float pitch = snd.getPitch() * (0.9f + (float)(Math.random() * 0.2));
+
+        client.level.playLocalSound(
+                pos.x, pos.y, pos.z,
+                snd.getHitSound(),
+                SoundSource.BLOCKS,
+                vol, pitch, false
         );
     }
 
+    private static Vec3 resolveBlockCollision(Minecraft client, Vec3 from, Vec3 to) {
+        final double ITEM_R = 0.125;
+        final double SKIN   = 0.001;
+
+        AABB itemBox = new AABB(
+                from.x - ITEM_R, from.y - ITEM_R, from.z - ITEM_R,
+                from.x + ITEM_R, from.y + ITEM_R, from.z + ITEM_R
+        );
+
+        Vec3 movement = to.subtract(from);
+
+        AABB sweepBox = itemBox.expandTowards(movement).inflate(SKIN);
+
+        List<VoxelShape> shapes = new ArrayList<>();
+        client.level.getBlockCollisions(null, sweepBox).forEach(shapes::add);
+
+        double mx = net.minecraft.world.phys.shapes.Shapes.collide(
+                net.minecraft.core.Direction.Axis.X, itemBox, shapes, movement.x);
+        if (Math.abs(mx - movement.x) > SKIN) {
+            currentVelocity = new Vec3(0, currentVelocity.y, currentVelocity.z);
+            itemBox = itemBox.move(mx, 0, 0);
+        } else {
+            itemBox = itemBox.move(mx, 0, 0);
+        }
+
+        double my = net.minecraft.world.phys.shapes.Shapes.collide(
+                net.minecraft.core.Direction.Axis.Y, itemBox, shapes, movement.y);
+        if (Math.abs(my - movement.y) > SKIN) {
+            currentVelocity = new Vec3(currentVelocity.x, 0, currentVelocity.z);
+            itemBox = itemBox.move(0, my, 0);
+        } else {
+            itemBox = itemBox.move(0, my, 0);
+        }
+
+        double mz = net.minecraft.world.phys.shapes.Shapes.collide(
+                net.minecraft.core.Direction.Axis.Z, itemBox, shapes, movement.z);
+        if (Math.abs(mz - movement.z) > SKIN)
+            currentVelocity = new Vec3(currentVelocity.x, currentVelocity.y, 0);
+
+        return from.add(mx, my, mz);
+    }
+
+    private static Vec3 computeWeightedVelocity() {
+        int len = velocityHistory.length;
+        Vec3 sum = Vec3.ZERO;
+        double totalWeight = 0;
+        for (int i = 0; i < len; i++) {
+            int idx = (velocityHistoryIndex - len + i + 256 * len) % len;
+            Vec3 v = velocityHistory[idx];
+            if (v == null) continue;
+            double weight = 1.0 + i;
+            sum = sum.add(v.scale(weight));
+            totalWeight += weight;
+        }
+        return totalWeight > 0 ? sum.scale(1.0 / totalWeight) : Vec3.ZERO;
+    }
+
     private static Vec3 getTargetPosition(Minecraft client, DragThingsConfig cfg) {
-        Vec3 eyePos = client.player.getEyePosition();
+        Vec3 eyePos  = client.player.getEyePosition();
         Vec3 lookVec = client.player.getLookAngle();
-        return eyePos.add(lookVec.scale(cfg.getDragDistance()));
+        double dist  = dynamicDragDistance > 0 ? dynamicDragDistance : cfg.getDragDistance();
+        Vec3 rawTarget = eyePos.add(lookVec.scale(dist));
+
+        net.minecraft.world.phys.BlockHitResult groundCheck = client.level.clip(
+                new net.minecraft.world.level.ClipContext(
+                        eyePos, rawTarget,
+                        net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                        net.minecraft.world.level.ClipContext.Fluid.NONE,
+                        client.player));
+        if (groundCheck.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            Vec3 hitPos = groundCheck.getLocation();
+            Vec3 dir    = hitPos.subtract(eyePos).normalize();
+            return hitPos.subtract(dir.scale(0.15));
+        }
+
+        return rawTarget;
     }
 
     private static ItemEntity findLookedAtItem(Minecraft client, DragThingsConfig cfg) {
-        Vec3 eyePos = client.player.getEyePosition();
+        Vec3 eyePos  = client.player.getEyePosition();
         Vec3 lookVec = client.player.getLookAngle();
-        Vec3 endPos = eyePos.add(lookVec.scale(cfg.getPickupRange()));
+        Vec3 endPos  = eyePos.add(lookVec.scale(cfg.getPickupRange()));
 
         AABB searchBox = new AABB(eyePos, endPos).inflate(1.0);
         List<ItemEntity> items = client.level.getEntitiesOfClass(ItemEntity.class, searchBox);
@@ -203,8 +689,7 @@ public class ItemDragHandler {
 
         for (ItemEntity item : items) {
             Vec3 toItem = item.position().subtract(eyePos).normalize();
-            double dot = lookVec.dot(toItem);
-
+            double dot  = lookVec.dot(toItem);
             if (dot > 0.95) {
                 double dist = eyePos.distanceTo(item.position());
                 if (dist < minDistance && dist < cfg.getPickupRange()) {
@@ -216,10 +701,47 @@ public class ItemDragHandler {
         return closest;
     }
 
+    private static void clearDragState() {
+        if (draggedItem != null && pendingReleaseItem == null) {
+            draggedItem.noPhysics = false;
+            draggedItem.setNoGravity(false);
+        }
+        draggedItem   = null;
+        currentVelocity = Vec3.ZERO;
+        prevPosition    = Vec3.ZERO;
+        lastFinalPos    = Vec3.ZERO;
+        dragTime        = 0f;
+        ticksSinceLastSync = 0;
+        dragSoundTick   = 0;
+        dynamicDragDistance = -1;
+        for (int i = 0; i < velocityHistory.length; i++) velocityHistory[i] = Vec3.ZERO;
+        for (ItemEntity f : followers) {
+            f.setNoGravity(false);
+            f.noPhysics = false;
+            f.setGlowingTag(false);
+        }
+        followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear();
+        DragParticleEffects.clearTimers();
+    }
 
+    private static void clearAll() {
+        if (draggedItem != null) draggedItem.setGlowingTag(false);
+        if (pendingReleaseItem != null) {
+            pendingReleaseItem.noPhysics = false;
+            pendingReleaseItem.setNoGravity(false);
+            pendingReleaseItem     = null;
+            pendingReleaseVelocity = Vec3.ZERO;
+        }
+        ItemTrailRenderer.clearAll();
+        ChainRenderer.clearAll();
+        clearDragState();
+    }
 
-    public static ItemEntity getHoveredItem() { return hoveredItem; }
-    public static boolean isDragging()        { return draggedItem != null; }
-    public static ItemEntity getDraggedItem() { return draggedItem; }
-    public static Vec3 getCurrentVelocity()   { return currentVelocity; }
+    public static boolean isDraggingFollower(ItemEntity e) { return followers.contains(e); }
+    public static List<ItemEntity> getFollowers() { return followers; }
+    public static ItemEntity getHoveredItem()     { return hoveredItem; }
+    public static boolean isDragging()            { return draggedItem != null; }
+    public static ItemEntity getDraggedItem()     { return draggedItem; }
+    public static Vec3 getCurrentVelocity()       { return currentVelocity; }
+    public static double getDynamicDragDistance() { return dynamicDragDistance; }
 }

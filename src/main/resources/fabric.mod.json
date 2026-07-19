@@ -1,11 +1,12 @@
 {
 	"schemaVersion": 1,
 	"id": "dragthings",
-	"version": "1.0.0",
+	"version": "0.3.0",
 	"name": "Drag Things",
+	"accessWidener": "dragthings.accesswidener",
 	"description": "Adds interactive drag physics to Minecraft — pull, move, and struggle with everything.",
 	"authors": [
-		"Marsterhmm"
+		"Marsterhmmm"
 	],
 	"license": "MIT",
 	"icon": "assets/dragthings/icon.png",
