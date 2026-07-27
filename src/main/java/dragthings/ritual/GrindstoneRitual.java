@@ -4,6 +4,7 @@ import dragthings.Dragthings;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.ExperienceOrb;
@@ -24,17 +25,23 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class GrindstoneRitual {
 
-    private static final Map<Integer, ServerLevel> activeTables = new ConcurrentHashMap<>();
-    private static final Map<Integer, Integer>     cooldown     = new ConcurrentHashMap<>();
+    // FIX: was Map<Integer, ServerLevel> — no player reference meant no way
+    // to detect the dragging player disconnecting, so this entry leaked
+    // forever once a player left mid-drag. Made worse now that dragged
+    // items never despawn (setUnlimitedLifetime), so the old 5-minute
+    // despawn was quietly acting as a failsafe cleanup — gone now, needs
+    // its own real cleanup. Level is derived from player.level().
+    private static final Map<Integer, ServerPlayer> activeTables = new ConcurrentHashMap<>();
+    private static final Map<Integer, Integer>      cooldown     = new ConcurrentHashMap<>();
 
     private static final double RADIUS         = 1;
     private static final int    COOLDOWN_TICKS = 20;
 
     private GrindstoneRitual() {}
 
-    public static void onStartDrag(int entityId, ServerLevel level) {
+    public static void onStartDrag(int entityId, ServerLevel level, ServerPlayer player) {
         boolean isNew = !activeTables.containsKey(entityId);
-        activeTables.put(entityId, level);
+        activeTables.put(entityId, player);
         // Play start sound only on the first registration, not on every sync packet.
         if (isNew) {
             var e = level.getEntity(entityId);
@@ -56,11 +63,18 @@ public final class GrindstoneRitual {
 
         if (activeTables.isEmpty()) return;
 
-        Iterator<Map.Entry<Integer, ServerLevel>> it = activeTables.entrySet().iterator();
+        Iterator<Map.Entry<Integer, ServerPlayer>> it = activeTables.entrySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<Integer, ServerLevel> entry = it.next();
-            int stoneId     = entry.getKey();
-            ServerLevel level = entry.getValue();
+            Map.Entry<Integer, ServerPlayer> entry = it.next();
+            int          stoneId = entry.getKey();
+            ServerPlayer player  = entry.getValue();
+
+            // FIX: player disconnected mid-drag — stop tracking.
+            if (player.isRemoved() || !(player.level() instanceof ServerLevel level)) {
+                it.remove();
+                cooldown.remove(stoneId);
+                continue;
+            }
 
             var e = level.getEntity(stoneId);
             if (!(e instanceof ItemEntity stone) || !stone.isAlive()) {
@@ -87,7 +101,7 @@ public final class GrindstoneRitual {
             ItemEnchantments enchants = stack.get(DataComponents.ENCHANTMENTS);
             ItemEnchantments stored   = stack.get(DataComponents.STORED_ENCHANTMENTS);
             boolean hasEnchants = (enchants != null && !enchants.isEmpty())
-                                || (stored  != null && !stored.isEmpty());
+                    || (stored  != null && !stored.isEmpty());
             if (!hasEnchants) continue;
 
             // Calculate XP reward before stripping

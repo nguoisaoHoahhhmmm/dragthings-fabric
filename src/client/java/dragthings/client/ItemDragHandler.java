@@ -5,6 +5,7 @@ import dragthings.client.ChainRenderer;
 import dragthings.Dragthings;
 import dragthings.network.DragItemPayload;
 import dragthings.network.PlaceBlockPayload;
+import dragthings.network.SetCraftingTargetPayload;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -20,11 +21,14 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.lwjgl.glfw.GLFW;
@@ -39,6 +43,7 @@ public class ItemDragHandler {
     private static boolean wasMousePressed = false;
 
     private static KeyMapping addToDragKey;
+    private static KeyMapping setCraftingTargetKey;
 
     private static Vec3 currentVelocity = Vec3.ZERO;
     private static Vec3 smoothPosition  = Vec3.ZERO;
@@ -82,6 +87,12 @@ public class ItemDragHandler {
                 "key.categories.dragthings"
         ));
 
+        setCraftingTargetKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.dragthings.set_crafting_target",
+                InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K,
+                "key.categories.dragthings"
+        ));
+
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearAll());
 
         ScreenEvents.BEFORE_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
@@ -107,6 +118,24 @@ public class ItemDragHandler {
 
             hoveredItem = findLookedAtItem(client, cfg);
             boolean isMousePressed = Minecraft.getInstance().mouseHandler.isRightPressed();
+
+            // ── SET CRAFTING TARGET (open GUI) ──────────────────────────────
+            if (setCraftingTargetKey.consumeClick()) {
+                // Prefer whatever crafting-table ITEM ENTITY is currently
+                // relevant (being dragged, or just hovered) — this covers
+                // the "drag the table around" ritual mode.
+                ItemEntity candidateEntity = isDragging() ? draggedItem : hoveredItem;
+                if (candidateEntity != null && candidateEntity.getItem().is(Items.CRAFTING_TABLE)) {
+                    client.setScreen(new SetCraftingTargetScreen(false, candidateEntity.getId(), BlockPos.ZERO));
+                } else if (client.hitResult instanceof BlockHitResult blockHit
+                        && client.level.getBlockState(blockHit.getBlockPos()).is(Blocks.CRAFTING_TABLE)) {
+                    // Otherwise fall back to whatever PLACED crafting table
+                    // block the crosshair is currently resting on.
+                    client.setScreen(new SetCraftingTargetScreen(true, -1, blockHit.getBlockPos()));
+                }
+                // Neither found: quietly do nothing — pressing the key while
+                // not looking at any crafting table has no target to set.
+            }
 
             if (isDragging() && isMousePressed) {
                 client.options.keyUse.setDown(false);

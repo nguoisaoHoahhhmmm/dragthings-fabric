@@ -3,6 +3,7 @@ package dragthings.ritual;
 import dragthings.Dragthings;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -28,13 +29,14 @@ public final class FurnaceRitual {
 
     /** Tracks the burning state of an active furnace. */
     private static final class BurningState {
-        final ServerLevel level;
+        final ServerLevel  level;
+        final ServerPlayer player;
         final FurnaceType type;
         int burnTimeLeft;  // ticks of fuel remaining
         int particleTicker = 0;
 
-        BurningState(ServerLevel l, FurnaceType t, int burnTicks) {
-            level = l; type = t; burnTimeLeft = burnTicks;
+        BurningState(ServerLevel l, ServerPlayer p, FurnaceType t, int burnTicks) {
+            level = l; player = p; type = t; burnTimeLeft = burnTicks;
         }
     }
 
@@ -70,11 +72,11 @@ public final class FurnaceRitual {
 
     private FurnaceRitual() {}
 
-    public static void onStartDrag(int entityId, ServerLevel level) {
+    public static void onStartDrag(int entityId, ServerLevel level, ServerPlayer player) {
         // Only register if not already burning; preserve existing burn state on re-drag
         if (!activeFurnaces.containsKey(entityId)) {
             FurnaceType type = detectType(getStack(level, entityId));
-            if (type != null) activeFurnaces.put(entityId, new BurningState(level, type, 0));
+            if (type != null) activeFurnaces.put(entityId, new BurningState(level, player, type, 0));
         }
         // Play a distinct "picked up" sound for each furnace variant
         var e = level.getEntity(entityId);
@@ -109,6 +111,18 @@ public final class FurnaceRitual {
             Map.Entry<Integer, BurningState> entry = it.next();
             int furnaceId = entry.getKey();
             BurningState state = entry.getValue();
+
+            // FIX: was only checking whether the furnace item entity was
+            // still alive — if the PLAYER disconnected mid-drag, this entry
+            // (plus fuelSearchCooldown) leaked forever, since dragged items
+            // no longer despawn on their own (setUnlimitedLifetime). An
+            // abandoned furnace would otherwise keep burning/cooking
+            // autonomously with no player around, indefinitely.
+            if (state.player.isRemoved()) {
+                it.remove();
+                fuelSearchCooldown.remove(furnaceId);
+                continue;
+            }
             ServerLevel level = state.level;
 
             var ent = level.getEntity(furnaceId);
@@ -169,7 +183,7 @@ public final class FurnaceRitual {
 
     @SuppressWarnings("unchecked")
     private static void tickCooking(ServerLevel level, ItemEntity furnace,
-                                     ItemEntity ingredient, FurnaceType type) {
+                                    ItemEntity ingredient, FurnaceType type) {
         ItemStack input = ingredient.getItem();
         RecipeType<AbstractCookingRecipe> recipeType = (RecipeType<AbstractCookingRecipe>) type.recipeType;
 

@@ -3,6 +3,7 @@ package dragthings.ritual;
 import dragthings.Dragthings;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -35,19 +36,39 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class CraftingRitual {
 
-    private static final Map<Integer, ServerLevel> activeTables = new ConcurrentHashMap<>();
-    private static final Map<Integer, Integer>     cooldown     = new ConcurrentHashMap<>();
+    // FIX: was Map<Integer, ServerLevel> — no player reference meant no way
+    // to detect the dragging player disconnecting, so this entry (and the
+    // ritual's tick logic) leaked forever once a player left mid-drag. Made
+    // worse now that dragged items never despawn (setUnlimitedLifetime), so
+    // the old 5-minute despawn was quietly acting as a failsafe cleanup —
+    // that failsafe is gone, so this needs its own real cleanup now.
+    // Level is derived from player.level() instead of storing it separately.
+    private static final Map<Integer, ServerPlayer> activeTables = new ConcurrentHashMap<>();
+    private static final Map<Integer, Integer>      cooldown     = new ConcurrentHashMap<>();
+
+    // GUI-set target item for "drag the table" mode — set via
+    // SetCraftingTargetScreen (isBlockTarget=false), read by tryCraft()
+    // as a fallback when the off-hand is empty. Cleared on release so a
+    // stale target doesn't silently carry over to a completely different
+    // table picked up later (tables aren't otherwise individually
+    // identified beyond their transient entity ID).
+    private static final Map<Integer, net.minecraft.world.item.Item> guiTargets = new ConcurrentHashMap<>();
 
     private static final double RADIUS         = 1;
     private static final int    COOLDOWN_TICKS = 20;
 
     private CraftingRitual() {}
 
+    /** Called by the SetCraftingTargetPayload network handler. */
+    public static void setGuiTarget(int entityId, net.minecraft.world.item.Item item) {
+        guiTargets.put(entityId, item);
+    }
+
     // ── Public API ────────────────────────────────────────────────────────
 
-    public static void onStartDrag(int entityId, ServerLevel level) {
+    public static void onStartDrag(int entityId, ServerLevel level, ServerPlayer player) {
         boolean isNew = !activeTables.containsKey(entityId);
-        activeTables.put(entityId, level);
+        activeTables.put(entityId, player);
         if (isNew) {
             var e = level.getEntity(entityId);
             if (e instanceof ItemEntity table) {
@@ -61,6 +82,7 @@ public final class CraftingRitual {
     public static void onRelease(int entityId) {
         activeTables.remove(entityId);
         cooldown.remove(entityId);
+        guiTargets.remove(entityId);
     }
 
     public static void tick() {
@@ -69,11 +91,20 @@ public final class CraftingRitual {
 
         if (activeTables.isEmpty()) return;
 
-        Iterator<Map.Entry<Integer, ServerLevel>> it = activeTables.entrySet().iterator();
+        Iterator<Map.Entry<Integer, ServerPlayer>> it = activeTables.entrySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<Integer, ServerLevel> entry = it.next();
-            int tableId       = entry.getKey();
-            ServerLevel level = entry.getValue();
+            Map.Entry<Integer, ServerPlayer> entry = it.next();
+            int          tableId = entry.getKey();
+            ServerPlayer player  = entry.getValue();
+
+            // FIX: player disconnected mid-drag — stop tracking, nothing to
+            // craft for. Without this check the entry (and its cooldown)
+            // lived forever.
+            if (player.isRemoved() || !(player.level() instanceof ServerLevel level)) {
+                it.remove();
+                cooldown.remove(tableId);
+                continue;
+            }
 
             var e = level.getEntity(tableId);
             if (!(e instanceof ItemEntity table) || !table.isAlive()) {
@@ -82,7 +113,7 @@ public final class CraftingRitual {
                 continue;
             }
 
-            if (!cooldown.containsKey(tableId) && tryCraft(level, table)) {
+            if (!cooldown.containsKey(tableId) && tryCraft(level, table, player)) {
                 cooldown.put(tableId, COOLDOWN_TICKS);
             }
         }
@@ -90,9 +121,93 @@ public final class CraftingRitual {
 
     // ── Core logic ────────────────────────────────────────────────────────
 
-    private static boolean tryCraft(ServerLevel level, ItemEntity table) {
-        // FIX: pickupDelay is private in ItemEntity (mojmap) — use the public
-        // hasPickUpDelay() accessor instead of touching the field directly.
+    /**
+     * If the player is holding an item in their OFF-HAND, that item is
+     * treated as a "template" — instead of scanning every ShapelessRecipe
+     * for whatever nearby items happen to satisfy, we look up the specific
+     * recipe(s) that produce that exact item and try to gather ITS
+     * ingredients from nearby entities. This works for ShapedRecipe too
+     * (something the radius-based search below can't do), since we already
+     * know exactly which recipe we're building — no grid/position matching
+     * needed at all, just "do we have one of everything this recipe wants
+     * nearby". Off-hand empty → falls back to the original behavior.
+     */
+    private static boolean tryCraft(ServerLevel level, ItemEntity table, ServerPlayer player) {
+        ItemStack offhand = player.getOffhandItem();
+        if (!offhand.isEmpty()) {
+            return tryCraftTemplate(level, table, offhand.getItem());
+        }
+        net.minecraft.world.item.Item guiTarget = guiTargets.get(table.getId());
+        if (guiTarget != null) {
+            return tryCraftTemplate(level, table, guiTarget);
+        }
+        return tryCraftAnyShapeless(level, table);
+    }
+
+    /**
+     * Template mode: craft the SPECIFIC recipe that produces {@code targetItem},
+     * regardless of Shaped/Shapeless — see tryCraft() doc above for why this
+     * sidesteps the whole shape-matching problem.
+     *
+     * NOTE: uses recipe.getResultItem() directly rather than building a real
+     * positional CraftingInput and calling assemble(). This is correct for
+     * the vast majority of recipes (tools, weapons, armor, blocks — a fixed
+     * result stack), but recipes whose assemble() logic depends on the
+     * actual input stacks (repairing, dyeing leather armor, banner patterns,
+     * firework star mixing) won't get that extra behavior here — an
+     * accepted simplification for this ritual mechanic.
+     */
+    private static boolean tryCraftTemplate(ServerLevel level, ItemEntity table,
+                                            net.minecraft.world.item.Item targetItem) {
+        AABB box = new AABB(table.position(), table.position()).inflate(RADIUS);
+        List<ItemEntity> nearby = level.getEntitiesOfClass(ItemEntity.class, box,
+                i -> i != table && i.isAlive() && !i.getItem().isEmpty()
+                        && !i.hasPickUpDelay());
+        if (nearby.isEmpty()) return false;
+
+        for (RecipeHolder<CraftingRecipe> holder :
+                level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING)) {
+
+            CraftingRecipe recipe = holder.value();
+            ItemStack recipeResult = recipe.getResultItem(level.registryAccess());
+            if (!recipeResult.is(targetItem)) continue;
+
+            // getIngredients() is a flat list for BOTH ShapedRecipe and
+            // ShapelessRecipe — shape only matters for real grid placement,
+            // which we're deliberately not doing here.
+            List<net.minecraft.world.item.crafting.Ingredient> ingredients = recipe.getIngredients();
+            if (ingredients.isEmpty() || ingredients.size() > nearby.size()) continue;
+
+            int[] claimed = new int[ingredients.size()];
+            if (!matchIngredients(ingredients, nearby, claimed)) continue;
+
+            ItemStack result = recipeResult.copy();
+            if (result.isEmpty()) continue;
+
+            for (int ci : claimed) {
+                RitualUtil.shrinkOrDiscard(nearby.get(ci), 1);
+            }
+            RitualUtil.spawnResult(level, table, result);
+
+            level.playSound(null, table.blockPosition(),
+                    SoundEvents.WOOD_PLACE, SoundSource.BLOCKS, 0.9f, 1.1f);
+            level.playSound(null, table.blockPosition(),
+                    SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.5f, 1.4f);
+            level.sendParticles(ParticleTypes.HAPPY_VILLAGER,
+                    table.getX(), table.getY() + 0.4, table.getZ(),
+                    12, 0.3, 0.2, 0.3, 0.0);
+            level.sendParticles(ParticleTypes.ENCHANTED_HIT,
+                    table.getX(), table.getY() + 0.3, table.getZ(),
+                    8, 0.25, 0.2, 0.25, 0.02);
+
+            Dragthings.LOGGER.info("Crafting ritual (template): {} (table #{})",
+                    result.getHoverName().getString(), table.getId());
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean tryCraftAnyShapeless(ServerLevel level, ItemEntity table) {
         AABB box = new AABB(table.position(), table.position()).inflate(RADIUS);
         List<ItemEntity> nearby = level.getEntitiesOfClass(ItemEntity.class, box,
                 i -> i != table && i.isAlive() && !i.getItem().isEmpty()

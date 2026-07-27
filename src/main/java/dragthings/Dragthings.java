@@ -1,10 +1,13 @@
 package dragthings;
 
 import dragthings.network.DragItemPayload;
+import dragthings.network.CraftingProgressPayload;
 import dragthings.network.PlaceBlockPayload;
 import dragthings.network.RitualProgressPayload;
+import dragthings.network.SetCraftingTargetPayload;
 import dragthings.ritual.AnvilRitual;
 import dragthings.ritual.ChestLootRitual;
+import dragthings.ritual.CraftingGridRitual;
 import dragthings.ritual.CraftingRitual;
 import dragthings.ritual.EnchantRitual;
 import dragthings.ritual.EnderChestRitual;
@@ -72,22 +75,24 @@ public class Dragthings implements ModInitializer {
     // 16 blocks comfortably covers the full client range with slack, while
     // still blocking absurd distances (e.g. the old (0,0,0) teleport bug,
     // which was ~65+ blocks).
-    private static final double MAX_DRAG_DISTANCE_SQ = 16.0 * 16.0;
+    // FIX (round 2): 16 blocks still wasn't enough margin. This check runs
+    // per-entity for BOTH the leader AND every follower in a multi-drag
+    // chain — and each follower trails CHAIN_SPACING (0.45, in
+    // ItemDragHandler) further from the one ahead of it. With a long chain,
+    // the LAST follower can end up considerably farther from the player
+    // than the leader's own 12-block max reach (e.g. leader at 12 blocks +
+    // several followers behind it easily reaches 16-17+ blocks), so a flat
+    // 16-block cap was still rejecting legitimate far-chain drags and
+    // causing the same snap-back jitter. 24 blocks gives generous headroom
+    // for leader (12) + a long chain, while still blocking absurd distances
+    // (the old (0,0,0) teleport bug was 60+ blocks — nowhere close to this).
+    private static final double MAX_DRAG_DISTANCE_SQ = 24.0 * 24.0;
     private static final double MAX_THROW_SPEED      = 2.5;
 
-    // ItemTags has no SHULKER_BOXES constant (only BlockTags does), and to
-    // rule out any tag-data mismatch entirely, check the underlying block
-    // class directly instead of relying on a tag lookup — this is immune to
-    // datapack/tag registration issues since it's a plain instanceof check.
-    private static boolean isContainerItem(net.minecraft.world.item.ItemStack stack) {
-        if (stack.getItem() instanceof net.minecraft.world.item.BlockItem blockItem) {
-            var block = blockItem.getBlock();
-            return block instanceof net.minecraft.world.level.block.ShulkerBoxBlock
-                    || block instanceof net.minecraft.world.level.block.BarrelBlock
-                    || block instanceof net.minecraft.world.level.block.ChestBlock; // covers chest + trapped chest
-        }
-        return false;
-    }
+    // FIX: isContainerItem() used to be a private duplicate of the exact
+    // same check that also lived in ItemTooltipRenderer.java (client-side)
+    // — moved to ContainerUtil (shared common code) so there's exactly one
+    // place to update if a new container-like block is ever added.
 
     // ── Weapon-swing ─────────────────────────────────────────────────────
     private static final Map<Integer, Vec3>    lastDragPos    = new ConcurrentHashMap<>();
@@ -114,7 +119,9 @@ public class Dragthings implements ModInitializer {
 
         PayloadTypeRegistry.playC2S().register(DragItemPayload.TYPE, DragItemPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(PlaceBlockPayload.TYPE, PlaceBlockPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(SetCraftingTargetPayload.TYPE, SetCraftingTargetPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(RitualProgressPayload.TYPE, RitualProgressPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(CraftingProgressPayload.TYPE, CraftingProgressPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(DragItemPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
@@ -145,24 +152,49 @@ public class Dragthings implements ModInitializer {
                         return;
                     }
 
-                    item.setPos(payload.x(), payload.y(), payload.z());
+                    // FIX: check crafting-grid capture BEFORE the normal
+                    // position sync. If the item is sneaked into a placed
+                    // Crafting Table's virtual 3x3 grid (or, if a target was
+                    // set via the GUI, "touch and gather" mode consumes it
+                    // directly) — CraftingGridRitual owns the outcome, so
+                    // setPos is skipped whenever tryHandleDrag() reports it
+                    // took ownership this tick.
+                    ServerLevel gridLevel = (player.level() instanceof ServerLevel sLevel) ? sLevel : null;
+                    Vec3 gridTargetPos = new Vec3(payload.x(), payload.y(), payload.z());
+                    boolean gridHandled = gridLevel != null && CraftingGridRitual.tryHandleDrag(
+                            gridLevel, player, item, gridTargetPos, payload.isSneaking());
+                    if (gridLevel != null) {
+                        CraftingGridRitual.showGridPreview(gridLevel, player, gridTargetPos, payload.isSneaking());
+                    }
+
+                    if (!gridHandled) {
+                        item.setPos(payload.x(), payload.y(), payload.z());
+                    }
                     item.setNoGravity(true);
                     item.noPhysics = true;
                     item.setDeltaMovement(0, 0, 0);
                     item.setPickUpDelay(5);
+                    // FIX: any item that's ever been dragged should never
+                    // auto-despawn from its normal 5-minute age timeout —
+                    // once a player has invested effort dragging something
+                    // around (or it's mid-ritual, mid-chain, etc.), losing it
+                    // to a background despawn timer is surprising and
+                    // frustrating. Harmless to call every tick; the flag is
+                    // idempotent once set.
+                    item.setUnlimitedLifetime();
 
                     // ── Ritual registration ───────────────────────────────
                     if (player.level() instanceof ServerLevel sl) {
                         if (item.getItem().is(Items.ENCHANTING_TABLE)) EnchantRitual.onStartDrag(payload.entityId(), sl, player);
-                        if (item.getItem().is(Items.SMITHING_TABLE))   SmithingRitual.onStartDrag(payload.entityId(), sl);
-                        if (item.getItem().is(Items.GRINDSTONE))       GrindstoneRitual.onStartDrag(payload.entityId(), sl);
+                        if (item.getItem().is(Items.SMITHING_TABLE))   SmithingRitual.onStartDrag(payload.entityId(), sl, player);
+                        if (item.getItem().is(Items.GRINDSTONE))       GrindstoneRitual.onStartDrag(payload.entityId(), sl, player);
                         if (item.getItem().is(Items.FURNACE) || item.getItem().is(Items.BLAST_FURNACE) || item.getItem().is(Items.SMOKER))
-                            FurnaceRitual.onStartDrag(payload.entityId(), sl);
+                            FurnaceRitual.onStartDrag(payload.entityId(), sl, player);
                         if (item.getItem().is(Items.ANVIL) || item.getItem().is(Items.CHIPPED_ANVIL) || item.getItem().is(Items.DAMAGED_ANVIL))
                             AnvilRitual.onStartDrag(payload.entityId(), sl);
                         if (item.getItem().is(Items.CRAFTING_TABLE))
-                            CraftingRitual.onStartDrag(payload.entityId(), sl);
-                        if (isContainerItem(item.getItem())) {
+                            CraftingRitual.onStartDrag(payload.entityId(), sl, player);
+                        if (dragthings.ContainerUtil.isContainerItem(item.getItem())) {
                             LOGGER.info("ChestLootRitual trigger matched for item={} entity={}",
                                     item.getItem().getItem(), payload.entityId());
                             ChestLootRitual.onStartDrag(payload.entityId(), sl, player, payload.isSneaking());
@@ -319,6 +351,37 @@ public class Dragthings implements ModInitializer {
             });
         });
 
+        ServerPlayNetworking.registerGlobalReceiver(SetCraftingTargetPayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                ServerPlayer player = context.player();
+                if (player == null) return;
+
+                var resolved = dragthings.ItemNameResolver.resolve(payload.query());
+                if (resolved.isEmpty()) {
+                    player.displayClientMessage(
+                            net.minecraft.network.chat.Component.literal(
+                                    "Unknown item: \"" + payload.query() + "\""),
+                            true); // action bar
+                    return;
+                }
+                net.minecraft.world.item.Item target = resolved.get();
+
+                if (payload.isBlockTarget()) {
+                    if (!(player.level() instanceof ServerLevel sl)) return;
+                    net.minecraft.core.GlobalPos tableKey =
+                            net.minecraft.core.GlobalPos.of(sl.dimension(), payload.blockPos());
+                    CraftingGridRitual.setGuiTarget(sl, player, tableKey, target);
+                } else {
+                    CraftingRitual.setGuiTarget(payload.entityId(), target);
+                }
+
+                player.displayClientMessage(
+                        net.minecraft.network.chat.Component.literal(
+                                "Crafting target set: " + target.getDescription().getString()),
+                        true); // action bar
+            });
+        });
+
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             // Cooldowns
             mobHitCooldown.replaceAll((id, ticks) -> ticks - 1);
@@ -334,6 +397,7 @@ public class Dragthings implements ModInitializer {
             FurnaceRitual.tick();
             AnvilRitual.tick();
             CraftingRitual.tick();
+            CraftingGridRitual.tick();
             ChestLootRitual.tick();
             EnderChestRitual.tick();
         });

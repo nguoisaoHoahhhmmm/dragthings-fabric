@@ -65,7 +65,13 @@ public final class EnchantRitual {
 
     public static void onRelease(int entityId, ServerPlayer player) {
         activeTables.remove(entityId);
-        sendProgress(player, entityId, -1);
+        // FIX: onRelease is called from the client packet handler, so the
+        // player should still be valid here in practice — but guard anyway
+        // since sendProgress() otherwise silently no-ops on a bad connection,
+        // and this makes the invariant explicit rather than implicit.
+        if (!player.isRemoved()) {
+            sendProgress(player, entityId, -1);
+        }
     }
 
     public static void tick() {
@@ -77,6 +83,18 @@ public final class EnchantRitual {
             int tableId         = entry.getKey();
             ServerLevel level   = entry.getValue().level;
             ServerPlayer player = entry.getValue().player;
+
+            // FIX: previously only checked whether the table item entity was
+            // still alive — if the PLAYER disconnected mid-ritual (while
+            // dragging an enchanting table), this entry (plus storedXp and
+            // storedOrbCount) leaked forever, since the item entity itself
+            // can remain alive in the world independent of the player's
+            // connection. Same cleanup pattern already used by
+            // ChestLootRitual/EnderChestRitual.
+            if (player.isRemoved()) {
+                it.remove(); storedXp.remove(tableId); storedOrbCount.remove(tableId);
+                continue;
+            }
 
             var e = level.getEntity(tableId);
             if (!(e instanceof ItemEntity table) || !table.isAlive()) {

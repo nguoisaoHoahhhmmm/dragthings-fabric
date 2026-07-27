@@ -3,19 +3,13 @@ package dragthings.client;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
-import net.minecraft.world.level.block.BarrelBlock;
-import net.minecraft.world.level.block.ChestBlock;
-import net.minecraft.world.level.block.ShulkerBoxBlock;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -23,12 +17,14 @@ import java.util.List;
 
 public class ItemTooltipRenderer {
 
+    // FIX: Separated combat timeout — was 1200ms and hid tooltip during normal walking
     private static final long ATTACK_SUPPRESS_MS  = 600;
     private static final long HURT_SUPPRESS_MS    = 400;
 
     private static long lastAttackTime = 0;
     private static long lastHurtTime   = 0;
 
+    // Smooth fade
     private static float tooltipAlpha = 0f;
     private static final float FADE_IN_SPEED  = 0.12f;
     private static final float FADE_OUT_SPEED = 0.20f;
@@ -40,10 +36,10 @@ public class ItemTooltipRenderer {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null) return;
 
-            // Giả định config của bạn đã sẵn sàng
             DragThingsConfig cfg = DragThingsConfig.get();
             if (!cfg.showTooltip) { tooltipAlpha = 0f; return; }
 
+            // Hide when dragging or in a screen/menu
             if (ItemDragHandler.isDragging()) {
                 tooltipAlpha = Math.max(0f, tooltipAlpha - FADE_OUT_SPEED);
                 return;
@@ -76,58 +72,74 @@ public class ItemTooltipRenderer {
 
     private static boolean isInCombatMode(Minecraft mc) {
         updateCombatState(mc);
+        // FIX: Only suppress during active attack window or when recently hurt.
+        // Movement alone no longer hides the tooltip (was the main annoyance).
         if (mc.options.keyAttack.isDown()) return true;
         if (System.currentTimeMillis() - lastAttackTime < ATTACK_SUPPRESS_MS) return true;
         if (System.currentTimeMillis() - lastHurtTime   < HURT_SUPPRESS_MS)   return true;
         return false;
     }
 
+    /**
+     * Chest / Trapped Chest / Barrel / Shulker Box — anything whose contents
+     * are worth previewing. Delegates to ContainerUtil (shared common code)
+     * so this check stays in sync with the server-side ritual trigger in
+     * Dragthings.java instead of drifting apart as a separate duplicate.
+     */
     private static boolean isPreviewableContainer(ItemStack stack) {
-        if (!(stack.getItem() instanceof BlockItem blockItem)) return false;
-        var block = blockItem.getBlock();
-        return block instanceof ChestBlock
-                || block instanceof BarrelBlock
-                || block instanceof ShulkerBoxBlock;
+        return dragthings.ContainerUtil.isContainerItem(stack);
     }
 
+    /**
+     * One line per occupied slot, in slot order — e.g. "#3  Diamond x12".
+     * Reads straight from the item's own CONTAINER data component, which
+     * the client already has via normal entity tracking (no extra
+     * networking needed, same data ChestLootRitual reads server-side).
+     *
+     * Each item's own name is tinted by its rarity tier, same as the main
+     * hovered item's name — slot index and count stay gray so the rarity
+     * color stands out as the thing that actually varies per line.
+     */
     private static List<Component> buildContainerContentLines(ItemStack stack) {
         List<Component> lines = new ArrayList<>();
-
-        // Lấy thành phần chứa đồ trực tiếp từ Component
+        NonNullList<ItemStack> slots = NonNullList.withSize(CONTAINER_SLOTS, ItemStack.EMPTY);
         ItemContainerContents contents = stack.get(DataComponents.CONTAINER);
-        if (contents != null) {
-            int slotIndex = 0;
+        if (contents != null) contents.copyInto(slots);
 
-            // Sử dụng contents.stream() để quét qua mọi ô, kể cả các ô trống
-            // Điều này giúp lấy chính xác index thực tế của item trong hòm
-            List<ItemStack> allSlots = contents.stream().toList();
-
-            for (int i = 0; i < allSlots.size(); i++) {
-                ItemStack slotStack = allSlots.get(i);
-
-                // Kiểm tra item thực sự tồn tại và không phải không khí (AIR)
-                if (slotStack == null || slotStack.isEmpty()) continue;
-
-                // Xử lý chuỗi văn bản an toàn: Ép tên hiển thị về dạng Component thuần túy
-                Component itemName = slotStack.getHoverName();
-                ChatFormatting rarityColor = slotStack.getRarity().color();
-
-                Component line = Component.literal( (i + 1) + "." + "  ").withStyle(ChatFormatting.GRAY)
-                        .copy()
-                        .append(itemName.copy().withStyle(rarityColor))
-                        .append(Component.literal(" x" + slotStack.getCount()).withStyle(ChatFormatting.GRAY));
-
-                lines.add(line);
-            }
+        for (int i = 0; i < slots.size(); i++) {
+            ItemStack s = slots.get(i);
+            if (s.isEmpty()) continue;
+            Component line = Component.literal("#" + i + "  ").withStyle(ChatFormatting.GRAY)
+                    .copy()
+                    .append(s.getHoverName().copy().withStyle(rarityColor(s.getRarity())))
+                    .append(Component.literal(" x" + s.getCount()).withStyle(ChatFormatting.GRAY));
+            lines.add(line);
         }
-
         if (lines.isEmpty()) {
             lines.add(Component.literal("(empty)").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
         }
         return lines;
     }
 
-    private static void renderItemTooltip(GuiGraphics graphics, ItemEntity itemEntity, float alpha) {
+    /**
+     * FIX: Rarity has no getStyle()-style accessor in this mapping (that
+     * method belongs to a different class — Attribute — not Rarity; the
+     * internal Rarity API has churned across versions). The 4 rarity
+     * colors themselves are stable, public-facing constants unlikely to
+     * change, so hand-mapping them directly is more robust than chasing
+     * whatever internal accessor Rarity happens to expose this version.
+     */
+    private static ChatFormatting rarityColor(net.minecraft.world.item.Rarity rarity) {
+        return switch (rarity) {
+            case COMMON -> ChatFormatting.WHITE;
+            case UNCOMMON -> ChatFormatting.YELLOW;
+            case RARE -> ChatFormatting.AQUA;
+            case EPIC -> ChatFormatting.LIGHT_PURPLE;
+        };
+    }
+
+    private static void renderItemTooltip(net.minecraft.client.gui.GuiGraphics graphics,
+                                          ItemEntity itemEntity, float alpha) {
         Minecraft mc = Minecraft.getInstance();
         int screenWidth  = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
@@ -135,59 +147,66 @@ public class ItemTooltipRenderer {
         ItemStack stack = itemEntity.getItem();
         List<Component> lines = new ArrayList<>();
 
-        Component itemName = stack.getHoverName().copy().withStyle(stack.getRarity().color());
+        // Item name + optional stack count — tinted by the item's vanilla
+        // rarity tier (COMMON=white, UNCOMMON=yellow, RARE=aqua, EPIC=pink),
+        // same colors vanilla's own tooltip uses.
+        Component itemName = stack.getHoverName().copy().withStyle(rarityColor(stack.getRarity()));
         if (stack.getCount() > 1) {
             itemName = Component.literal("")
                     .append(itemName)
-                    .append(Component.literal(" x" + stack.getCount()).withStyle(ChatFormatting.GRAY));
+                    .append(Component.literal(" x" + stack.getCount())
+                            .withStyle(ChatFormatting.GRAY));
         }
         lines.add(itemName);
 
-        boolean shiftPressed = GLFW.glfwGetKey(mc.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(mc.getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
+        boolean shiftPressed =
+                GLFW.glfwGetKey(mc.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)  == GLFW.GLFW_PRESS
+                        || GLFW.glfwGetKey(mc.getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
 
         ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
         boolean hasEnchantments = enchantments != null && !enchantments.isEmpty();
-        boolean isContainer = isPreviewableContainer(stack);
+        boolean isContainer     = isPreviewableContainer(stack);
 
         if (shiftPressed) {
             if (hasEnchantments) {
                 enchantments.entrySet().forEach(entry -> {
-                    // FIX 1.21.1: Trích xuất tên Enchantment trực tiếp qua phương thức tĩnh từ Enchantment class
-                    Component enchantName = net.minecraft.world.item.enchantment.Enchantment.getFullname(entry.getKey(), entry.getIntValue());
-                    lines.add(Component.literal("  ").append(enchantName));
+                    String enchantName = entry.getKey().value().description().getString();
+                    int level = entry.getIntValue();
+                    lines.add(Component.literal("  ")
+                            .append(Component.literal(enchantName).withStyle(ChatFormatting.GRAY))
+                            .append(Component.literal(" " + toRoman(level)).withStyle(ChatFormatting.GRAY)));
                 });
             } else if (isContainer) {
+                // Same slot-by-slot listing ContainerPreviewRenderer used to
+                // draw as a 3D world-space billboard — now folded into this
+                // existing 2D HUD tooltip instead, reusing the same
+                // "Shift reveals more" pattern already built for enchants.
                 for (Component line : buildContainerContentLines(stack)) {
                     lines.add(Component.literal("  ").append(line));
                 }
             } else {
-                lines.add(Component.literal("No information").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+                lines.add(Component.literal("No description")
+                        .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
             }
         } else if (hasEnchantments) {
-            lines.add(Component.literal("[Shift] for information").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+            lines.add(Component.literal("[Shift] for description")
+                    .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
         } else if (isContainer) {
-            lines.add(Component.literal("[Shift] for contents").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+            lines.add(Component.literal("[Shift] for contents")
+                    .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
         }
 
         int lineHeight = mc.font.lineHeight + 2;
         int currentY   = (screenHeight / 2) + 15;
-        graphics.pose().pushPose();
-        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
-        com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
-        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, alpha);
+
+        int alphaInt = (int)(alpha * 255f) & 0xFF;
+        int textColor = (alphaInt << 24) | 0xFFFFFF;
+
         for (Component line : lines) {
             int x = (screenWidth - mc.font.width(line)) / 2;
-            graphics.drawString(mc.font, line, x, currentY, 0xFFFFFF, true);
+            graphics.drawString(mc.font, line, x, currentY, textColor, true);
             currentY += lineHeight;
         }
-
-        // 4. Khôi phục lại màu Shader hệ thống về mặc định (Alpha = 1.0f) để tránh làm mờ các UI khác của game
-        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-        com.mojang.blaze3d.systems.RenderSystem.disableBlend();
-
-        // 5. Khôi phục lại trạng thái ma trận render ban đầu
-        graphics.pose().popPose();
     }
 
     private static String toRoman(int n) {
