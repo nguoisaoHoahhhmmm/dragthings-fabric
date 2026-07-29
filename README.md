@@ -2,6 +2,14 @@
 
 ![Divider](https://cdn.modrinth.com/data/cached_images/d33b5cad4268c366f6a01d3c99a578e1a61adadd.png)
 
+<div align="center">
+
+[![Modrinth](https://cdn.modrinth.com/data/cached_images/f3e1f310d9859e7a98c330f69dee3bfd352a666a.png)](https://modrinth.com/mod/drag-things) [![Github](https://cdn.modrinth.com/data/cached_images/449eb417d6e1b2c5eb959896dc14f5741a02ee6b_0.webp)](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric)
+<br><br>
+[![Issues](https://img.shields.io/github/issues/nguoisaoHoahhhmmm/dragthings-fabric?style=for-the-badge&logo=github&label=Report%20Issues)](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric/issues)
+
+</div>
+
 # ABOUT
    Ever played Half-Life, R.E.P.O, or physics-heavy Roblox games like Dead Rails and A Dusty Trip? If you have, you know how incredibly satisfying and fun that item grabbing and dragging mechanic is. It’s always felt like a missed opportunity that Minecraft never had this kind of immersive interaction built-in. Well, if you've been looking for a way to bring those same lively, dynamic physics straight into your blocky world—Drag Things is exactly what you need!
 
@@ -44,7 +52,7 @@ Fully respects Fortune and Silk Touch!
 > - **Chain Items (Multi-Drag):** While dragging an item, look at another item and press the **G key** (Default bind, can be changed in Controls) to chain them together (Up to 8 items).
 > - **Place Block:** Drag a block onto a solid surface, hold steady, and release to place it.
 
-You can follow the clip in the gallery category for more information. ( Some videos maybe don't show enough information because outdated )
+You can follow the clip in the gallery category for more information. ( Some videos maybe don't show enough information because outdated :/ )
 
 ![Divider3](https://cdn.modrinth.com/data/cached_images/2c0fd1512a4a8322281a151e90f7f82baaca0d22.png)
 
