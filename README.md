@@ -1,14 +1,15 @@
 ![DRAGTHINGS](https://cdn.modrinth.com/data/cached_images/d6c79fe979f4c5b4348579922d1a68cd6cd3c8f8.png)
 
-![Divider](https://cdn.modrinth.com/data/cached_images/d33b5cad4268c366f6a01d3c99a578e1a61adadd.png)
-
 <div align="center">
 
-[![Modrinth](https://cdn.modrinth.com/data/cached_images/f3e1f310d9859e7a98c330f69dee3bfd352a666a.png)](https://modrinth.com/mod/drag-things) [![Github](https://cdn.modrinth.com/data/cached_images/449eb417d6e1b2c5eb959896dc14f5741a02ee6b_0.webp)](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric)
-<br><br>
+[![Modrinth Downloads](https://img.shields.io/modrinth/dt/drag-things?style=for-the-badge&logo=modrinth)](https://modrinth.com/mod/drag-things)
+[![Source Code](https://img.shields.io/badge/Source%20Code-GitHub-181717?style=for-the-badge&logo=github)](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric)
+
 [![Issues](https://img.shields.io/github/issues/nguoisaoHoahhhmmm/dragthings-fabric?style=for-the-badge&logo=github&label=Report%20Issues)](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric/issues)
 
 </div>
+
+![Divider](https://cdn.modrinth.com/data/cached_images/d33b5cad4268c366f6a01d3c99a578e1a61adadd.png)
 
 # ABOUT
    Ever played Half-Life, R.E.P.O, or physics-heavy Roblox games like Dead Rails and A Dusty Trip? If you have, you know how incredibly satisfying and fun that item grabbing and dragging mechanic is. It’s always felt like a missed opportunity that Minecraft never had this kind of immersive interaction built-in. Well, if you've been looking for a way to bring those same lively, dynamic physics straight into your blocky world—Drag Things is exactly what you need!
