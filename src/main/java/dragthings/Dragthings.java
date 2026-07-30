@@ -1,6 +1,7 @@
 package dragthings;
 
 import dragthings.network.DragItemPayload;
+import dragthings.network.MobDragPayload;
 import dragthings.network.CraftingProgressPayload;
 import dragthings.network.PlaceBlockPayload;
 import dragthings.network.RitualProgressPayload;
@@ -18,6 +19,7 @@ import dragthings.tool.DragToolHandler;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -30,6 +32,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.AxeItem;
@@ -97,6 +100,13 @@ public class Dragthings implements ModInitializer {
     // ── Weapon-swing ─────────────────────────────────────────────────────
     private static final Map<Integer, Vec3>    lastDragPos    = new ConcurrentHashMap<>();
     private static final Map<Integer, Integer> mobHitCooldown = new ConcurrentHashMap<>();
+    private static final Map<Integer, Boolean> mobPrevInvulnerable = new ConcurrentHashMap<>();
+    // Safety net: if a player disconnects mid-drag (crash, connection loss),
+    // we must still release whatever mob they were holding — otherwise it's
+    // left permanently noAi + invulnerable with no way to fix it short of a
+    // server restart. Keyed by player UUID since entity IDs aren't stable
+    // across a reconnect.
+    private static final Map<java.util.UUID, Integer> playerDraggedMob = new ConcurrentHashMap<>();
 
     private static final double MIN_SWING_DISTANCE   = 0.5;
     private static final double SWING_HIT_RADIUS     = 1.0;
@@ -118,6 +128,7 @@ public class Dragthings implements ModInitializer {
         LOGGER.info("DragThings v0.2 initialized!");
 
         PayloadTypeRegistry.playC2S().register(DragItemPayload.TYPE, DragItemPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(MobDragPayload.TYPE, MobDragPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(PlaceBlockPayload.TYPE, PlaceBlockPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(SetCraftingTargetPayload.TYPE, SetCraftingTargetPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(RitualProgressPayload.TYPE, RitualProgressPayload.CODEC);
@@ -253,6 +264,51 @@ public class Dragthings implements ModInitializer {
                     item.setNoGravity(false);
                     item.setDeltaMovement(throwVec);
                     item.setPickUpDelay(10);
+                }
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(MobDragPayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                ServerPlayer player = context.player();
+                if (player == null || player.level() == null) return;
+
+                Entity entity = player.level().getEntity(payload.entityId());
+                // Server-side safety net, independent of the client's config
+                // choices: never allow Player entities to be grabbed, and
+                // only LivingEntity targets make sense here at all.
+                if (!(entity instanceof LivingEntity mob) || entity instanceof Player) return;
+
+                double distSq = player.distanceToSqr(mob.getX(), mob.getY(), mob.getZ());
+                if (distSq > MAX_DRAG_DISTANCE_SQ) {
+                    LOGGER.warn("Player {} tried to drag mob too far ({} blocks²)",
+                            player.getName().getString(), (int) distSq);
+                    return;
+                }
+
+                if (payload.isDragging()) {
+                    mob.setPos(payload.x(), payload.y(), payload.z());
+                    mob.setDeltaMovement(0, 0, 0);
+                    if (mob instanceof Mob aiMob) aiMob.setNoAi(true);
+                    mob.setNoGravity(true);
+                    mob.noPhysics = true;
+                    mob.fallDistance = 0;
+
+                    if (payload.invulnerable()) {
+                        // Remember the ORIGINAL invulnerable flag once, the
+                        // first time this mob is grabbed, so release restores
+                        // whatever it actually was before (rather than always
+                        // forcing it back to false — some entities are
+                        // invulnerable by nature and should stay that way).
+                        mobPrevInvulnerable.putIfAbsent(mob.getId(), mob.isInvulnerable());
+                        mob.setInvulnerable(true);
+                    }
+
+                    playerDraggedMob.put(player.getUUID(), mob.getId());
+                } else {
+                    Vec3 throwVec = new Vec3(payload.vx(), payload.vy(), payload.vz());
+                    releaseMob(mob, throwVec);
+                    playerDraggedMob.remove(player.getUUID());
                 }
             });
         });
@@ -401,5 +457,45 @@ public class Dragthings implements ModInitializer {
             ChestLootRitual.tick();
             EnderChestRitual.tick();
         });
+
+        // Safety net: if a player disconnects (crash, connection loss, etc.)
+        // while dragging a mob, the client never gets to send its normal
+        // release packet. Without this, the mob would be stuck permanently
+        // noAi + invulnerable + no-gravity — silently broken until a server
+        // restart. This finds whatever mob that player was holding (if any)
+        // and releases it properly, with zero throw velocity since there's
+        // no final client input to base one on.
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            ServerPlayer player = handler.player;
+            if (player == null) return;
+
+            Integer mobId = playerDraggedMob.remove(player.getUUID());
+            if (mobId == null) return;
+
+            Entity entity = player.level().getEntity(mobId);
+            if (entity instanceof LivingEntity mob) {
+                releaseMob(mob, Vec3.ZERO);
+            }
+        });
+    }
+
+    /**
+     * Restores a mob to its normal, non-dragged state: re-enables AI,
+     * gravity, and physics, restores whatever invulnerable flag it had
+     * before being grabbed (not just forcing it to false), and applies a
+     * (possibly zero) throw velocity. Shared by the normal release path and
+     * the disconnect safety net above so both behave identically.
+     */
+    private static void releaseMob(LivingEntity mob, Vec3 throwVelocity) {
+        if (mob instanceof Mob aiMob) aiMob.setNoAi(false);
+        mob.setNoGravity(false);
+        mob.noPhysics = false;
+
+        Boolean prevInvuln = mobPrevInvulnerable.remove(mob.getId());
+        mob.setInvulnerable(prevInvuln != null && prevInvuln);
+
+        Vec3 throwVec = throwVelocity;
+        if (throwVec.length() > MAX_THROW_SPEED) throwVec = throwVec.normalize().scale(MAX_THROW_SPEED);
+        mob.setDeltaMovement(throwVec);
     }
 }

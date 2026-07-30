@@ -2,6 +2,7 @@ package dragthings.mixin.client;
 
 import dragthings.client.DragThingsConfig;
 import dragthings.client.ItemDragHandler;
+import dragthings.mobdrag.MobDragHandler;
 import net.minecraft.client.MouseHandler;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -22,6 +23,11 @@ public class ScrollInputMixin {
             boolean consumed = ItemDragHandler.handleScroll(yDelta);
             if (consumed) {
                 ci.cancel(); // prevent hotbar slot switching while dragging
+            }
+        } else if (MobDragHandler.isDragging()) {
+            boolean consumed = MobDragHandler.handleScroll(yDelta);
+            if (consumed) {
+                ci.cancel();
             }
         }
     }

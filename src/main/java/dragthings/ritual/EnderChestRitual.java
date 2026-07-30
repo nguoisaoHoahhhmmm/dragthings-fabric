@@ -29,11 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *     từng player (net.minecraft.world.entity.player.Player#getEnderChestInventory()),
  *     y hệt vanilla: đặt Ender Chest ở bất kỳ đâu, bất kỳ ai mở cũng thấy
  *     kho đồ ender chest RIÊNG của người mở, không phải của khối đó.
- *
- * Vì vậy ta phải track {@link ServerPlayer} thực hiện drag (không chỉ
- * ServerLevel như ChestLootRitual), và ghi thẳng vào
- * player.getEnderChestInventory() — một {@link Container} 27 slot.
  */
+
 public final class EnderChestRitual {
 
     private static final Map<Integer, ServerPlayer> activeChests = new ConcurrentHashMap<>();

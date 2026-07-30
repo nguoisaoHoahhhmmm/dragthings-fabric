@@ -40,6 +40,7 @@ public class ItemDragHandler {
 
     private static ItemEntity draggedItem = null;
     private static ItemEntity hoveredItem = null;
+    public static ItemEntity getHoveredItem() { return hoveredItem; }
     private static boolean wasMousePressed = false;
 
     private static KeyMapping addToDragKey;
@@ -52,11 +53,24 @@ public class ItemDragHandler {
     private static float dragTime = 0f;
     private static int ticksSinceLastSync = 0;
 
-    private static double dynamicDragDistance = -1;
+    // dynamicDragDistance is the TARGET distance (set instantly by scroll input).
+    // displayedDragDistance is what's actually used for positioning — it eases
+    // toward the target each tick so scrolling feels like a smooth zoom rather
+    // than an instant snap.
+    private static double dynamicDragDistance  = -1;
+    private static double displayedDragDistance = -1;
 
     private static final double SCROLL_STEP    = 0.5;
     private static final double MIN_DRAG_DIST  = 1.0;
-    private static final double MAX_DRAG_DIST  = 20.0;
+    private static final double MAX_DRAG_DIST  = 12.0;
+
+    // If the item's ACTUAL distance from the player's eyes ever exceeds
+    // MAX_DRAG_DIST by more than this much (e.g. player sprints away faster
+    // than the spring can keep up, or a collision holds the item back), the
+    // drag is force-released instead of letting it keep stretching. The
+    // small buffer just avoids releasing from ordinary spring settle jitter
+    // right at the max scroll distance.
+    private static final double DRAG_RELEASE_DISTANCE = MAX_DRAG_DIST + 2.0;
 
     private static final Vec3[] velocityHistory = new Vec3[6];
     private static int velocityHistoryIndex = 0;
@@ -68,11 +82,18 @@ public class ItemDragHandler {
     private static final List<Vec3>       followerPos     = new ArrayList<>();
     private static final List<Vec3>       followerVel     = new ArrayList<>();
     private static final List<Integer>    followerStuck   = new ArrayList<>();
+    private static final List<Integer>    followerCatchupTicks = new ArrayList<>();
     private static final double CHAIN_SPACING = 0.45;
 
     private static final int    STUCK_TICKS_THRESHOLD = 30;
     private static final double STUCK_TARGET_DIST     = 0.6;
     private static final double STUCK_MOVE_EPS        = 0.01;
+
+    // Instead of teleporting a stuck follower straight to its target in one
+    // frame, ease it there over a few ticks — same "catch up" behavior, just
+    // spread out so it reads as a quick hop instead of a snap. Ease fraction
+    // itself is configurable (feel.followerCatchupSpeed).
+    private static final int CATCHUP_DURATION_TICKS = 6;
 
     private static int dragSoundTick         = 0;
     private static final int DRAG_SOUND_INTERVAL = 8;
@@ -155,7 +176,8 @@ public class ItemDragHandler {
                 for (int i = 0; i < velocityHistory.length; i++) velocityHistory[i] = Vec3.ZERO;
 
                 double initialDist = client.player.getEyePosition().distanceTo(draggedItem.position());
-                dynamicDragDistance = Math.max(MIN_DRAG_DIST, Math.min(MAX_DRAG_DIST, initialDist));
+                dynamicDragDistance  = Math.max(MIN_DRAG_DIST, Math.min(MAX_DRAG_DIST, initialDist));
+                displayedDragDistance = dynamicDragDistance;
 
                 draggedItem.setNoGravity(true);
                 draggedItem.noPhysics = true;
@@ -174,7 +196,7 @@ public class ItemDragHandler {
                     DragParticleEffects.spawnBurst(client, draggedItem, 6);
                 }
 
-                followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear();
+                followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear(); followerCatchupTicks.clear();
                 DragParticleEffects.clearTimers();
 
                 if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
@@ -206,6 +228,7 @@ public class ItemDragHandler {
                     followerPos.add(hoveredItem.position());
                     followerVel.add(Vec3.ZERO);
                     followerStuck.add(0);
+                    followerCatchupTicks.add(0);
 
                     hoveredItem.setNoGravity(true);
                     hoveredItem.noPhysics = true;
@@ -242,6 +265,13 @@ public class ItemDragHandler {
                     wasMousePressed = isMousePressed;
                     return;
                 }
+
+                double eyeDistSq = client.player.getEyePosition().distanceToSqr(draggedItem.position());
+                if (eyeDistSq > DRAG_RELEASE_DISTANCE * DRAG_RELEASE_DISTANCE) {
+                    performRelease(client);
+                    wasMousePressed = isMousePressed;
+                    return;
+                }
                 for (int fi = followers.size() - 1; fi >= 0; fi--) {
                     if (!followers.get(fi).isAlive()) {
                         followers.get(fi).setNoGravity(false);
@@ -250,11 +280,18 @@ public class ItemDragHandler {
                         followerPos.remove(fi);
                         followerVel.remove(fi);
                         followerStuck.remove(fi);
+                        followerCatchupTicks.remove(fi);
                     }
                 }
                 dragTime += 0.05f;
                 ticksSinceLastSync++;
                 dragSoundTick++;
+
+                // Ease the displayed distance toward whatever scroll set as the
+                // target, so zooming the drag range in/out feels like a smooth
+                // camera-lens adjustment instead of an instant jump.
+                if (displayedDragDistance < 0) displayedDragDistance = dynamicDragDistance;
+                displayedDragDistance += (dynamicDragDistance - displayedDragDistance) * cfg.feel.getDistanceEaseSpeed();
 
                 Vec3 targetPos = getTargetPosition(client, cfg);
                 Vec3 toTarget  = targetPos.subtract(smoothPosition);
@@ -263,7 +300,18 @@ public class ItemDragHandler {
                 float weight = cfg.getWeightMultiplier(draggedItem.getItem());
                 double invWeight = 1.0 / weight;
 
-                double k = cfg.getDragForce() * invWeight * (0.4 + 0.6 * Math.tanh(distance * 1.2));
+                // Smoothstep ramp: spring goes from 0 -> 1 strength over the
+                // first feel.startupEaseMs of the drag, so grabbing an item
+                // "settles" into the pull instead of snapping taut. If eased
+                // startup is disabled, getStartupEaseSeconds() returns 0,
+                // dragTime/0 -> Infinity -> startupT clamps to 1 (full
+                // strength immediately, no ramp) — no divide-by-zero crash,
+                // floating point division by zero is well-defined.
+                float easeSeconds = cfg.feel.getStartupEaseSeconds();
+                float startupT = easeSeconds <= 0f ? 1f : Math.min(1f, dragTime / easeSeconds);
+                float startupEase = startupT * startupT * (3f - 2f * startupT);
+
+                double k = startupEase * cfg.getDragForce() * invWeight * (0.4 + 0.6 * Math.tanh(distance * 1.2));
                 double c = 2.0 * Math.sqrt(k);
 
                 Vec3 springForce  = distance > 0.001 ? toTarget.scale(k) : Vec3.ZERO;
@@ -278,15 +326,24 @@ public class ItemDragHandler {
 
                 prevPosition   = smoothPosition;
                 smoothPosition = smoothPosition.add(currentVelocity);
+                Vec3 intendedPos = smoothPosition; // pre-collision/pre-bobbing target for this tick
 
                 Vec3 frameVelocity = smoothPosition.subtract(prevPosition);
                 velocityHistory[velocityHistoryIndex % velocityHistory.length] = frameVelocity;
                 velocityHistoryIndex++;
 
-                double bobbingOffset = Math.sin(dragTime * 2.0) * cfg.getBobbingAmount();
+                // Adaptive bobbing: full idle "breathing" sway while nearly
+                // still, damped down as speed rises so it doesn't add jitter
+                // on top of real motion at high speed.
+                double bobbingAmount = cfg.getBobbingAmount() / (1.0 + speed * cfg.feel.getBobbingSpeedDamping());
+                double bobbingOffset = Math.sin(dragTime * 2.0) * bobbingAmount;
                 Vec3 resolvedPos = resolveBlockCollision(
                         client, prevPosition, smoothPosition.add(0, bobbingOffset, 0));
                 smoothPosition = resolvedPos.subtract(0, bobbingOffset, 0);
+
+                Vec3 blockedDelta = intendedPos.subtract(smoothPosition);
+                boolean collidedThisTick = blockedDelta.length() > 0.02;
+                ItemSquashStretchHandler.tick(draggedItem, currentVelocity, collidedThisTick, blockedDelta.length());
 
                 draggedItem.setNoGravity(true);
                 draggedItem.noPhysics = true;
@@ -310,13 +367,22 @@ public class ItemDragHandler {
                 }
 
                 if (cfg.enableSound && collisionSoundCooldown == 0) {
-                    boolean clampedX = Math.abs(resolvedPos.x - smoothPosition.x) > 0.01;
-                    boolean clampedY = Math.abs(resolvedPos.y - smoothPosition.y) > 0.01;
-                    boolean clampedZ = Math.abs(resolvedPos.z - smoothPosition.z) > 0.01;
-                    if (clampedX || clampedZ || clampedY) {
+                    // Reuses the same blockedDelta computed above for squash
+                    // & stretch — this replaces a previous version of this
+                    // check that compared resolvedPos against smoothPosition
+                    // AFTER smoothPosition had already been reassigned to a
+                    // value derived from resolvedPos, so the X/Z comparisons
+                    // were always ~0 (never fired) and the Y comparison was
+                    // just picking up bobbing oscillation instead of a real
+                    // collision.
+                    if (collidedThisTick) {
                         playCollisionSound(client, resolvedPos, speed);
                         collisionSoundCooldown = COLLISION_SOUND_COOLDOWN_TICKS;
                     }
+                }
+
+                if (collidedThisTick) {
+                    ItemCameraShakeHandler.onImpact(blockedDelta.length());
                 }
 
                 if (cfg.enableSound && dragSoundTick >= DRAG_SOUND_INTERVAL) {
@@ -363,25 +429,46 @@ public class ItemDragHandler {
 
                     Vec3 fTo = fPos.add(fVel);
 
-                    int stuckTicks = followerStuck.get(fi);
+                    int stuckTicks   = followerStuck.get(fi);
+                    int catchupTicks = followerCatchupTicks.get(fi);
                     double actualMove = fTo.distanceTo(fPos);
                     boolean farFromTarget = fDist > STUCK_TARGET_DIST;
                     boolean barelyMoving  = actualMove < STUCK_MOVE_EPS;
 
-                    Vec3 newFPos;
-                    if (farFromTarget && barelyMoving) {
-                        stuckTicks++;
-                    } else {
-                        stuckTicks = 0;
+                    if (catchupTicks == 0) {
+                        if (farFromTarget && barelyMoving) {
+                            stuckTicks++;
+                        } else {
+                            stuckTicks = 0;
+                        }
+
+                        if (stuckTicks > STUCK_TICKS_THRESHOLD) {
+                            // Trigger the catch-up: instead of resolving one
+                            // full teleport this tick, spend the next few
+                            // ticks easing most of the remaining gap closed
+                            // each tick (intentionally skipping collision
+                            // resolution here too, same as before, so it can
+                            // cut back through geometry it fell behind).
+                            catchupTicks = CATCHUP_DURATION_TICKS;
+                            stuckTicks = 0;
+                        }
                     }
 
-                    if (stuckTicks > STUCK_TICKS_THRESHOLD) {
-                        newFPos = fTo;
-                        stuckTicks = 0;
+                    Vec3 newFPos;
+                    if (catchupTicks > 0) {
+                        newFPos = fPos.add(fTo.subtract(fPos).scale(cfg.feel.getFollowerCatchupSpeed()));
+                        catchupTicks--;
                     } else {
                         newFPos = resolveBlockCollision(client, followerPos.get(fi), fTo);
                     }
                     followerStuck.set(fi, stuckTicks);
+                    followerCatchupTicks.set(fi, catchupTicks);
+
+                    // Catch-up hops intentionally cut through geometry, so
+                    // they're not a real "impact" — only score a collision
+                    // when it came from the normal resolveBlockCollision path.
+                    double fImpactMag = (catchupTicks == 0) ? fTo.subtract(newFPos).length() : 0.0;
+                    ItemSquashStretchHandler.tick(follower, fVel, fImpactMag > 0.02, fImpactMag);
 
                     followerPos.set(fi, newFPos);
                     followerVel.set(fi, fVel);
@@ -410,9 +497,7 @@ public class ItemDragHandler {
                     ticksSinceLastSync = 0;
                 }
 
-                Vec3 handPos = client.player.getEyePosition()
-                        .add(client.player.getLookAngle().scale(0.4));
-                ChainRenderer.update(handPos, draggedItem, followers);
+                ChainRenderer.update(draggedItem, followers);
             }
 
             // ── RELEASE ───────────────────────────────────────────────────────
@@ -534,7 +619,7 @@ public class ItemDragHandler {
         } catch (Exception ex) {
             Dragthings.LOGGER.warn("Error releasing drag followers", ex);
         } finally {
-            followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear();
+            followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear(); followerCatchupTicks.clear();
         }
 
         Dragthings.LOGGER.debug("Throw spd={}", String.format("%.3f", throwVelocity.length()));
@@ -554,7 +639,7 @@ public class ItemDragHandler {
 
         Vec3 eyePos  = client.player.getEyePosition();
         Vec3 lookVec = client.player.getLookAngle();
-        double range = dynamicDragDistance > 0 ? dynamicDragDistance : cfg.getDragDistance();
+        double range = displayedDragDistance > 0 ? displayedDragDistance : cfg.getDragDistance();
         Vec3 endPos  = eyePos.add(lookVec.scale(range + 1.0));
 
         net.minecraft.world.phys.BlockHitResult hit = client.level.clip(
@@ -627,7 +712,7 @@ public class ItemDragHandler {
         );
     }
 
-    private static Vec3 resolveBlockCollision(Minecraft client, Vec3 from, Vec3 to) {
+    public static Vec3 resolveBlockCollision(Minecraft client, Vec3 from, Vec3 to) {
         final double ITEM_R = 0.125;
         final double SKIN   = 0.001;
 
@@ -687,7 +772,7 @@ public class ItemDragHandler {
     private static Vec3 getTargetPosition(Minecraft client, DragThingsConfig cfg) {
         Vec3 eyePos  = client.player.getEyePosition();
         Vec3 lookVec = client.player.getLookAngle();
-        double dist  = dynamicDragDistance > 0 ? dynamicDragDistance : cfg.getDragDistance();
+        double dist  = displayedDragDistance > 0 ? displayedDragDistance : cfg.getDragDistance();
         Vec3 rawTarget = eyePos.add(lookVec.scale(dist));
 
         net.minecraft.world.phys.BlockHitResult groundCheck = client.level.clip(
@@ -742,15 +827,17 @@ public class ItemDragHandler {
         dragTime        = 0f;
         ticksSinceLastSync = 0;
         dragSoundTick   = 0;
-        dynamicDragDistance = -1;
+        dynamicDragDistance  = -1;
+        displayedDragDistance = -1;
         for (int i = 0; i < velocityHistory.length; i++) velocityHistory[i] = Vec3.ZERO;
         for (ItemEntity f : followers) {
             f.setNoGravity(false);
             f.noPhysics = false;
             f.setGlowingTag(false);
         }
-        followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear();
+        followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear(); followerCatchupTicks.clear();
         DragParticleEffects.clearTimers();
+        ItemSquashStretchHandler.clearAll();
     }
 
     private static void clearAll() {
@@ -768,9 +855,8 @@ public class ItemDragHandler {
 
     public static boolean isDraggingFollower(ItemEntity e) { return followers.contains(e); }
     public static List<ItemEntity> getFollowers() { return followers; }
-    public static ItemEntity getHoveredItem()     { return hoveredItem; }
     public static boolean isDragging()            { return draggedItem != null; }
     public static ItemEntity getDraggedItem()     { return draggedItem; }
     public static Vec3 getCurrentVelocity()       { return currentVelocity; }
-    public static double getDynamicDragDistance() { return dynamicDragDistance; }
+    public static double getDynamicDragDistance() { return displayedDragDistance; }
 }

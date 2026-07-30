@@ -39,6 +39,7 @@ public class ItemEntityGlowMixin {
     private static boolean isDragActive(ItemEntity item) {
         if (!DragThingsConfig.get().showOutline) return false;
         return ItemDragHandler.getDraggedItem() == item
-                || ItemDragHandler.isDraggingFollower(item);
+                || ItemDragHandler.isDraggingFollower(item)
+                || ItemDragHandler.getHoveredItem() == item;
     }
 }

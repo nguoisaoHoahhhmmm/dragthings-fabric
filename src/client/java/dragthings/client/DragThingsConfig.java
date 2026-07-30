@@ -14,30 +14,200 @@ public class DragThingsConfig implements ConfigData {
     // PHYSICS
     // =========================================================================
 
+    @ConfigEntry.Category("physics")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 5, max = 50)
     public int lerpSpeed = 25;
 
+    @ConfigEntry.Category("physics")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 1, max = 20)
     public int dragForce = 5;
 
+    @ConfigEntry.Category("physics")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 70, max = 99)
     public int friction = 90;
 
+    @ConfigEntry.Category("physics")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 5, max = 30)
     public int maxVelocity = 12;
 
+    @ConfigEntry.Category("physics")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 1, max = 20)
     public int throwMultiplier = 8;
 
     // =========================================================================
+    // FEEL  (v0.5.0 — easing, squash & stretch, camera shake, follower catch-up)
+    // =========================================================================
+
+    @ConfigEntry.Category("feel")
+    @ConfigEntry.Gui.CollapsibleObject
+    public FeelConfig feel = new FeelConfig();
+
+    public static class FeelConfig {
+
+        /** Smoothly ramp the spring up to full strength right after grabbing, instead of full force on tick 1. */
+        @ConfigEntry.Gui.Tooltip
+        public boolean enableStartupEase = true;
+
+        /** How long (ms) the "settling in" ramp takes after grabbing an item. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 0, max = 1000)
+        public int startupEaseMs = 250;
+
+        /** How quickly scrolling to change drag distance eases toward the new target. Higher = snappier. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 1, max = 100)
+        public int distanceEaseSpeed = 18;
+
+        /** Bobbing amplitude shrinks the faster the item moves, instead of staying constant. */
+        @ConfigEntry.Gui.Tooltip
+        public boolean adaptiveBobbing = true;
+
+        /** How aggressively speed reduces bobbing. Higher = bobbing disappears sooner as you move. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 0, max = 20)
+        public int bobbingSpeedDamping = 6;
+
+        // ── Squash & stretch ─────────────────────────────────────────────
+        /** Items elongate along their direction of travel and briefly flatten on impact. */
+        @ConfigEntry.Gui.Tooltip
+        public boolean enableSquashStretch = true;
+
+        /** Overall strength of the squash & stretch effect. 100 = default, 0 = off, 200 = exaggerated. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 0, max = 200)
+        public int squashStretchIntensity = 100;
+
+        // ── Follower catch-up ────────────────────────────────────────────
+        /** How quickly a follower that fell behind eases back into place. Higher = snappier catch-up hop. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 10, max = 90)
+        public int followerCatchupSpeed = 40;
+
+        // ── Camera shake ─────────────────────────────────────────────────
+        /** A small FOV "punch-in" plays when a dragged item slams into something. Never affects aim/look direction. */
+        @ConfigEntry.Gui.Tooltip
+        public boolean enableCameraShake = true;
+
+        /** Strength of the impact FOV kick. 100 = default, 0 = off, 200 = dramatic. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 0, max = 200)
+        public int cameraShakeIntensity = 100;
+
+        // ── Getters ──────────────────────────────────────────────────────
+        public float getStartupEaseSeconds()    { return enableStartupEase ? startupEaseMs / 1000f : 0f; }
+        public float getDistanceEaseSpeed()     { return distanceEaseSpeed / 100f; }
+        public float getBobbingSpeedDamping()   { return adaptiveBobbing ? bobbingSpeedDamping : 0f; }
+        public float getSquashStretchIntensity(){ return enableSquashStretch ? squashStretchIntensity / 100f : 0f; }
+        public float getFollowerCatchupSpeed()  { return followerCatchupSpeed / 100f; }
+        public float getCameraShakeIntensity()  { return enableCameraShake ? cameraShakeIntensity / 100f : 0f; }
+    }
+
+    // =========================================================================
+    // MOB DRAG  (v0.6.0 — capture/carry living entities)
+    // =========================================================================
+
+    @ConfigEntry.Category("mobDrag")
+    @ConfigEntry.Gui.CollapsibleObject
+    public MobConfig mobDrag = new MobConfig();
+
+    public static class MobConfig {
+
+        /** Master switch for the whole mob-drag feature. */
+        @ConfigEntry.Gui.Tooltip
+        public boolean enableMobDrag = true;
+
+        /** Peaceful animals: cows, sheep, pigs, chickens, villagers... */
+        @ConfigEntry.Gui.Tooltip
+        public boolean allowPassive = true;
+
+        /** Mobs that fight back if provoked: wolves, bees, iron golems, endermen... */
+        @ConfigEntry.Gui.Tooltip
+        public boolean allowNeutral = true;
+
+        /** Mobs that attack on sight: zombies, skeletons, creepers, spiders... */
+        @ConfigEntry.Gui.Tooltip
+        public boolean allowHostile = false;
+
+        /** Boss mobs: Ender Dragon, Wither. Off by default for obvious reasons. */
+        @ConfigEntry.Gui.Tooltip
+        public boolean allowBoss = false;
+
+        /**
+         * Comma-separated entity IDs to ALWAYS allow, regardless of the
+         * category toggles above. Example: minecraft:enderman,minecraft:witch
+         */
+        @ConfigEntry.Gui.Tooltip
+        public String extraAllowlist = "";
+
+        /**
+         * Comma-separated entity IDs to ALWAYS block, even if their category
+         * is allowed. Example: minecraft:villager,minecraft:iron_golem
+         */
+        @ConfigEntry.Gui.Tooltip
+        public String extraBlacklist = "";
+
+        /** Mob can't take or deal damage while being carried. */
+        @ConfigEntry.Gui.Tooltip
+        public boolean invulnerableWhileDragged = true;
+
+        /** How long the shrink-down animation takes when you grab a mob. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 50, max = 1000)
+        public int shrinkDurationMs = 220;
+
+        /** How long the grow-back animation takes when you let go. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 50, max = 1000)
+        public int growDurationMs = 260;
+
+        /** How small the mob shrinks to (percentage of normal size). */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 5, max = 60)
+        public int minScalePercent = 16;
+
+        /** Maximum range (blocks) to hover/grab a mob from. */
+        @ConfigEntry.Gui.Tooltip
+        @ConfigEntry.BoundedDiscrete(min = 2, max = 10)
+        public int mobPickupRange = 5;
+
+        /**
+         * Once fully shrunk, show the mob's spawn egg icon instead of a tiny
+         * 3D model. Falls back to the 3D model automatically if the mob type
+         * has no spawn egg (bosses, custom mobs from other mods, etc.).
+         */
+        @ConfigEntry.Gui.Tooltip
+        public boolean useEggIconWhenAvailable = true;
+
+        // ── Getters ──────────────────────────────────────────────────────
+        public float getShrinkSeconds()  { return shrinkDurationMs / 1000f; }
+        public float getGrowSeconds()    { return growDurationMs / 1000f; }
+        public float getMinScale()       { return minScalePercent / 100f; }
+        public double getPickupRange()   { return mobPickupRange; }
+
+        private static java.util.Set<String> splitIds(String csv) {
+            java.util.Set<String> out = new java.util.HashSet<>();
+            if (csv == null || csv.isBlank()) return out;
+            for (String part : csv.split(",")) {
+                String t = part.trim();
+                if (!t.isEmpty()) out.add(t);
+            }
+            return out;
+        }
+
+        public boolean isAllowlisted(String entityId) { return splitIds(extraAllowlist).contains(entityId); }
+        public boolean isBlacklisted(String entityId) { return splitIds(extraBlacklist).contains(entityId); }
+    }
+
+    // =========================================================================
     // WEIGHT
     // =========================================================================
 
+    @ConfigEntry.Category("weight")
     @ConfigEntry.Gui.CollapsibleObject
     public WeightConfig weight = new WeightConfig();
 
@@ -70,6 +240,7 @@ public class DragThingsConfig implements ConfigData {
     // RITUALS
     // =========================================================================
 
+    @ConfigEntry.Category("rituals")
     @ConfigEntry.Gui.CollapsibleObject
     public RitualConfig ritual = new RitualConfig();
 
@@ -205,6 +376,7 @@ public class DragThingsConfig implements ConfigData {
     // CHAIN
     // =========================================================================
 
+    @ConfigEntry.Category("chain")
     @ConfigEntry.Gui.CollapsibleObject
     public ChainConfig chain = new ChainConfig();
 
@@ -265,6 +437,7 @@ public class DragThingsConfig implements ConfigData {
     // =========================================================================
     // TRAIL
     // =========================================================================
+    @ConfigEntry.Category("trail")
     @ConfigEntry.Gui.CollapsibleObject
     public TrailConfig trail = new TrailConfig();
 
@@ -330,14 +503,17 @@ public class DragThingsConfig implements ConfigData {
     // DISTANCE
     // =========================================================================
 
+    @ConfigEntry.Category("distance")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 1, max = 10)
     public int dragDistance = 4;
 
+    @ConfigEntry.Category("distance")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 1, max = 10)
     public int pickupRange = 5;
 
+    @ConfigEntry.Category("distance")
     @ConfigEntry.Gui.Tooltip
     public boolean scrollToAdjustDistance = true;
 
@@ -345,19 +521,24 @@ public class DragThingsConfig implements ConfigData {
     // VISUAL
     // =========================================================================
 
+    @ConfigEntry.Category("visual")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 0, max = 10)
     public int bobbingAmount = 3;
 
+    @ConfigEntry.Category("visual")
     @ConfigEntry.Gui.Tooltip
     public boolean emissionGlow = true;
 
+    @ConfigEntry.Category("visual")
     @ConfigEntry.Gui.Tooltip
     public boolean showTooltip = true;
 
+    @ConfigEntry.Category("visual")
     @ConfigEntry.Gui.Tooltip
     public boolean raiseArm = true;
 
+    @ConfigEntry.Category("visual")
     @ConfigEntry.Gui.Tooltip
     public boolean enableParticles = true;
 
@@ -365,6 +546,7 @@ public class DragThingsConfig implements ConfigData {
     // SOUND
     // =========================================================================
 
+    @ConfigEntry.Category("sound")
     @ConfigEntry.Gui.Tooltip
     public boolean enableSound = true;
 
@@ -372,19 +554,24 @@ public class DragThingsConfig implements ConfigData {
     // BEHAVIOUR
     // =========================================================================
 
+    @ConfigEntry.Category("behaviour")
     @ConfigEntry.Gui.Tooltip
     public boolean gravityOnRelease = true;
 
+    @ConfigEntry.Category("behaviour")
     @ConfigEntry.Gui.Tooltip
     public boolean showOutline = true;
 
+    @ConfigEntry.Category("behaviour")
     @ConfigEntry.Gui.Tooltip
     public int outlineColor = 0x55FFFF;
 
+    @ConfigEntry.Category("behaviour")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 50, max = 300)
     public int itemScale = 130;
 
+    @ConfigEntry.Category("behaviour")
     @ConfigEntry.Gui.Tooltip
     @ConfigEntry.BoundedDiscrete(min = 1, max = 8)
     public int maxDragCount = 3;
@@ -394,6 +581,7 @@ public class DragThingsConfig implements ConfigData {
      * (and moving slowly) places the block instead of throwing the item.
      * Disable if you find it triggers accidentally.
      */
+    @ConfigEntry.Category("behaviour")
     @ConfigEntry.Gui.Tooltip
     public boolean enableBlockPlacement = true;
 

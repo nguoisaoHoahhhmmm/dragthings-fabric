@@ -1,6 +1,7 @@
 package dragthings.mixin.client;
 
 import dragthings.client.ItemDragHandler;
+import dragthings.mobdrag.MobDragHandler;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
@@ -28,7 +29,20 @@ public class CancelInteractWhileDraggingMixin {
     @Inject(method = "interact", at = @At("HEAD"), cancellable = true)
     private void dragthings$cancelEntityInteract(Player player, Entity target, InteractionHand hand,
                                                  CallbackInfoReturnable<InteractionResult> cir) {
-        if (ItemDragHandler.isDragging()) {
+        if (ItemDragHandler.isDragging() || MobDragHandler.isDragging()) {
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        // Preemptively cancel on the grab click itself — otherwise vanilla's
+        // interact (taming, trading, sitting toggle, mounting...) fires
+        // BEFORE MobDragHandler's own tick sees the click and starts the
+        // drag, since interact() runs during input processing while our
+        // handler only polls at END_CLIENT_TICK (after input for that tick
+        // has already been handled).
+        if (target == MobDragHandler.getHoveredMob()
+                && player.isShiftKeyDown()
+                && player.getItemInHand(hand).isEmpty()) {
             cir.setReturnValue(InteractionResult.FAIL);
         }
     }

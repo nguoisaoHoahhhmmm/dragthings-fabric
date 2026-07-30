@@ -8,7 +8,12 @@
 		"RaiseArmWhileDraggingMixin",
 		"ScrollInputMixin",
 		"ItemEntityGlowMixin",
+		"MobDragGlowMixin",
 		"ItemEntityScaleMixin",
+		"ItemSquashStretchMixin",
+		"ItemCameraShakeMixin",
+		"MobDragScaleMixin",
+		"MobDragIconMixin",
 		"ItemPhysicLiteScaleMixin"
 	],
 	"injectors": {

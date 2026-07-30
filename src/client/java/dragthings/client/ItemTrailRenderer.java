@@ -11,7 +11,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
@@ -31,6 +31,13 @@ import java.util.List;
  * a miter offset at each POINT by averaging the right vectors of the
  * adjacent segments. Adjacent quads then share exactly the same edge
  * vertices → no gap or overlap at joints.
+ *
+ * Perf note: the point/right-vector snapshot used for rendering is rebuilt
+ * at TICK rate (in pushEntry, via Deque.toArray reusing a fixed array) —
+ * not at render/frame rate. Previously a brand-new ArrayList + Vec3[] was
+ * allocated for every entry on every single rendered frame (up to 100+/sec),
+ * which is a lot of needless GC churn for data that only actually changes
+ * 20 times/sec.
  */
 public final class ItemTrailRenderer {
 
@@ -43,10 +50,26 @@ public final class ItemTrailRenderer {
         Vec3              lastPos = null;
         float             alpha   = 0f;
 
+        // Snapshot of `points`, rebuilt only when the deque actually changes
+        // (tick rate), reused across every render frame until then.
+        Vec3[] snapshot    = new Vec3[MAX_POINTS_CAP];
+        int    snapshotLen = 0;
+
         TrailEntry(int id) { entityId = id; }
+
+        void refreshSnapshot() {
+            snapshotLen = points.size();
+            points.toArray(snapshot); // reuses the array, no allocation
+        }
     }
 
     private static final List<TrailEntry> entries = new ArrayList<>();
+
+    // Shared per-frame scratch buffers: snapshot points + 1 live interpolated
+    // head, and their billboard right-vectors. Reused across every entry,
+    // every frame — no per-entry, per-frame array allocation.
+    private static final Vec3[] scratchPts    = new Vec3[MAX_POINTS_CAP + 1];
+    private static final Vec3[] scratchRights = new Vec3[MAX_POINTS_CAP + 1];
 
     private ItemTrailRenderer() {}
 
@@ -56,7 +79,7 @@ public final class ItemTrailRenderer {
         WorldRenderEvents.LAST.register(ItemTrailRenderer::onRender);
     }
 
-    public static void tickTrail(ItemEntity leader, List<ItemEntity> followers) {
+    public static void tickTrail(Entity leader, List<? extends Entity> followers) {
         int needed = 1 + followers.size();
         while (entries.size() > needed) entries.remove(entries.size() - 1);
         while (entries.size() < needed) entries.add(new TrailEntry(-1));
@@ -70,6 +93,7 @@ public final class ItemTrailRenderer {
         for (TrailEntry e : entries) {
             e.lastPos = null;
             e.points.clear(); // prevent ghost trail on next drag start
+            e.snapshotLen = 0;
         }
     }
 
@@ -79,7 +103,7 @@ public final class ItemTrailRenderer {
 
     // ── Internal helpers ─────────────────────────────────────────────────
 
-    private static void pushEntry(TrailEntry entry, ItemEntity item) {
+    private static void pushEntry(TrailEntry entry, Entity item) {
         entry.entityId = item.getId();
         Vec3 pos = item.position();
 
@@ -91,20 +115,9 @@ public final class ItemTrailRenderer {
             entry.points.addLast(pos);
             if (entry.points.size() > maxPoints) entry.points.pollFirst();
             entry.lastPos = pos;
+            entry.refreshSnapshot(); // deque changed — refresh the render-time snapshot now, not per-frame
         }
         entry.alpha = Math.min(1f, entry.alpha + fadeSpeed);
-    }
-
-    /**
-     * Compute a stable billboard "right" vector at a single point.
-     * seg is the direction going through or away from this point.
-     */
-    private static Vec3 billboardRight(Vec3 camForward, Vec3 seg) {
-        Vec3 r = camForward.cross(seg).normalize();
-        if (r.lengthSqr() < 1e-10) r = new Vec3(0, 1, 0).cross(seg).normalize();
-        if (r.lengthSqr() < 1e-10) r = new Vec3(1, 0, 0).cross(seg).normalize();
-        if (r.lengthSqr() < 1e-10) r = new Vec3(1, 0, 0); // last-resort unit vector
-        return r;
     }
 
     // ── Render ────────────────────────────────────────────────────────────
@@ -159,19 +172,23 @@ public final class ItemTrailRenderer {
         boolean       hasVertices  = false;
 
         for (TrailEntry entry : entries) {
-            if (entry.points.size() < 2) continue;
+            if (entry.snapshotLen < 1) continue;
 
-            // Append live interpolated head so the trail connects to the item exactly
-            List<Vec3> pts = new ArrayList<>(entry.points);
-            var ent = mc.level.getEntity(entry.entityId);
-            if (ent instanceof ItemEntity item) {
-                pts.add(new Vec3(
-                        item.xo + (item.getX() - item.xo) * partial,
-                        item.yo + (item.getY() - item.yo) * partial,
-                        item.zo + (item.getZ() - item.zo) * partial));
+            // Copy the tick-rate snapshot into the shared scratch buffer,
+            // then append this frame's live interpolated head — cheap
+            // reference copies, no new List/array allocated here.
+            int n = entry.snapshotLen;
+            System.arraycopy(entry.snapshot, 0, scratchPts, 0, n);
+
+            Entity ent = mc.level.getEntity(entry.entityId);
+            if (ent != null) {
+                scratchPts[n] = new Vec3(
+                        ent.xo + (ent.getX() - ent.xo) * partial,
+                        ent.yo + (ent.getY() - ent.yo) * partial,
+                        ent.zo + (ent.getZ() - ent.zo) * partial);
+                n++;
             }
 
-            int n = pts.size();
             if (n < 2) continue;
 
             float baseAlpha = entry.alpha * headAlpha;
@@ -181,10 +198,9 @@ public final class ItemTrailRenderer {
             // segments. Adjacent quads then share identical edge positions,
             // eliminating the gap/overlap that occurs when each segment uses
             // its own independent right vector.
-            Vec3[] rights = new Vec3[n];
             for (int i = 0; i < n; i++) {
-                Vec3 segBefore = (i > 0)     ? pts.get(i).subtract(pts.get(i - 1)).normalize() : null;
-                Vec3 segAfter  = (i < n - 1) ? pts.get(i + 1).subtract(pts.get(i)).normalize() : null;
+                Vec3 segBefore = (i > 0)     ? scratchPts[i].subtract(scratchPts[i - 1]).normalize() : null;
+                Vec3 segAfter  = (i < n - 1) ? scratchPts[i + 1].subtract(scratchPts[i]).normalize() : null;
 
                 Vec3 avgSeg;
                 if (segBefore != null && segAfter != null) {
@@ -194,13 +210,13 @@ public final class ItemTrailRenderer {
                     avgSeg = segAfter != null ? segAfter : segBefore;
                 }
 
-                rights[i] = billboardRight(camForward, avgSeg);
+                scratchRights[i] = BillboardMath.billboardRight(camForward, avgSeg);
             }
 
             // ── Emit one quad per segment using the shared miter offsets ──
             for (int i = 0; i < n - 1; i++) {
-                Vec3 a = pts.get(i);
-                Vec3 b = pts.get(i + 1);
+                Vec3 a = scratchPts[i];
+                Vec3 b = scratchPts[i + 1];
 
                 // t = 0 at tail, 1 at head
                 float tA = (float) i       / (n - 1);
@@ -220,8 +236,8 @@ public final class ItemTrailRenderer {
                 float hwA = halfW * (tA * 0.5f + 0.5f);
                 float hwB = halfW * (tB * 0.5f + 0.5f);
 
-                Vec3 offsetA = rights[i].scale(hwA);
-                Vec3 offsetB = rights[i + 1].scale(hwB);
+                Vec3 offsetA = scratchRights[i].scale(hwA);
+                Vec3 offsetB = scratchRights[i + 1].scale(hwB);
 
                 // 4 corners of the quad, relative to camera
                 float ax0 = (float)(a.x - cam.x - offsetA.x);
