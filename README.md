@@ -1,5 +1,14 @@
 ![DRAGTHINGS](https://cdn.modrinth.com/data/cached_images/d6c79fe979f4c5b4348579922d1a68cd6cd3c8f8.png)
 
+<div align="center">
+
+[![Modrinth Downloads](https://img.shields.io/modrinth/dt/drag-things?style=for-the-badge&logo=modrinth)](https://modrinth.com/mod/drag-things)
+[![Source Code](https://img.shields.io/badge/Source%20Code-GitHub-181717?style=for-the-badge&logo=github)](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric)
+
+[![Issues](https://img.shields.io/github/issues/nguoisaoHoahhhmmm/dragthings-fabric?style=for-the-badge&logo=github&label=Report%20Issues)](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric/issues)
+
+</div>
+
 ![Divider](https://cdn.modrinth.com/data/cached_images/d33b5cad4268c366f6a01d3c99a578e1a61adadd.png)
 
 # ABOUT
@@ -12,22 +21,24 @@
 ![Divider2](https://cdn.modrinth.com/data/cached_images/046f84f77bfc85d61fc689a56918f56666546ba7.png)
 
 ###  Main Features
- - You can easily drag items by holding Right Click, then move them around by moving your camera.
- - If you want to throw an item, just release Right Click while you are moving.
- - The physics are smooth and satisfying to play with.
- - It’s optimized so it won't lag your game.
+ - **Interactive Drag Physics:** Easily drag items/blocks by holding Right Click, then move them around smoothly by moving your camera.
+ - **Kinetic Throwing:** Want to throw an item? Just flick your mouse and release Right Click to launch it with velocity based on your movement.
+ - **Dynamic Weight System:** Heavy items like anvils or swords move slower with noticeable "drag lag", while lighter items like feathers are effortless to swing. Fully configurable via Cloth Config!
+ - **Multi-Drag Chain:** Manually chain up to 8 items together to move entire piles of loot at once!
+ - **Smart Block Placement:** Drag a placeable block onto a surface, hold, and release to automatically place it down in the world.
 ###  Automated Rituals & Block Functions
+*   **Storage Ritual:** Easily drag and drop items near any storage blocks (Chests, Barrels, etc.) to automatically deposit them.
+*   **Crafting Ritual:** Drag a Crafting Table near items to auto-craft on the go! *(Currently supports all Shapeless Recipes).*
 *   **Enchanting Ritual:** Drag an Enchanting Table near Lapis, an enchantable item, and XP orbs. The table automatically absorbs the orbs and enchants the item, complete with a dedicated HUD bar to track stored XP!
 *   **Smithing Ritual:** Drag a Smithing Table near a template, base item, and addition item to auto-craft your netherite or upgraded gear seamlessly.
 *   **Grindstone Ritual:** Drag a Grindstone near 2 identical items to repair and strip enchants (returns XP), or near 1 enchanted item to disenchant only.
 ###  Dynamic Tool & Weapon Interactions
 *   **Weapon Swing Damage:** Dragging a Sword, Axe, or Trident fast enough now slashes and damages nearby mobs. The faster you swing, the more damage it deals!
-*   **On-the-go World Interaction:** Interact with the environment dynamically by dragging tools over blocks:
-    *   *Hoe:* Tills farmland
-    *   *Shovel:* Creates dirt paths
+*   **On-the-go World Interaction:** Interact with the environment dynamically by dragging tools over blocks. Hold `Shift` to trigger secondary actions:
+    *   *Hoe:* Tills farmland (Hold Shift)
+    *   *Shovel:* Creates dirt paths (Hold Shift)
     *   *Axe:* Strips logs
-    *   *Pickaxe:* Progressively mines blocks (crack stages build up, resets after ~2s idle). 
-    *   More unique and complex function for each tool will coming in next update 
+    *   *Pickaxe:* Progressively mines blocks (crack stages build up, resets after ~2s idle).
 
 Fully respects Fortune and Silk Touch!
 
@@ -37,11 +48,12 @@ Fully respects Fortune and Silk Touch!
 
 ![Divider3](https://cdn.modrinth.com/data/cached_images/2c0fd1512a4a8322281a151e90f7f82baaca0d22.png)
 
- > - Hold right click while looking at an item to pick it up.
- > - Move your camera while holding right click to move the item.
- > - Release right click while moving if you want to throw the item. 
+> - **Pick up / Move:** Look at an item and hold **Right Click**. Move your camera to drag it.
+> - **Throw:** Flick your camera and release **Right Click** while moving to launch the item.
+> - **Chain Items (Multi-Drag):** While dragging an item, look at another item and press the **G key** (Default bind, can be changed in Controls) to chain them together (Up to 8 items).
+> - **Place Block:** Drag a block onto a solid surface, hold steady, and release to place it.
 
-You can follow the clip in the gallery category for more information.
+You can follow the clip in the gallery category for more information. ( Some videos maybe don't show enough information because outdated :/ )
 
 ![Divider3](https://cdn.modrinth.com/data/cached_images/2c0fd1512a4a8322281a151e90f7f82baaca0d22.png)
 
