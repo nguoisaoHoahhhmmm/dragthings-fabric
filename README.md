@@ -12,7 +12,10 @@
 ![Divider](https://cdn.modrinth.com/data/cached_images/d33b5cad4268c366f6a01d3c99a578e1a61adadd.png)
 
 # ABOUT
-   Ever played Half-Life, R.E.P.O, or physics-heavy Roblox games like Dead Rails and A Dusty Trip? If you have, you know how incredibly satisfying and fun that item grabbing and dragging mechanic is. It’s always felt like a missed opportunity that Minecraft never had this kind of immersive interaction built-in. Well, if you've been looking for a way to bring those same lively, dynamic physics straight into your blocky world—Drag Things is exactly what you need!
+
+One thing I've always liked in games like Half-Life, R.E.P.O, Dead Rails, and A Dusty Trip is how you can grab and move objects naturally. It's a small feature, but it makes interacting with the world feel much more engaging.
+
+Drag Things adds a similar mechanic to Minecraft, allowing you to grab and drag dropped items with your mouse while keeping the gameplay simple and lightweight.
 
 ![Divider](https://cdn.modrinth.com/data/cached_images/d33b5cad4268c366f6a01d3c99a578e1a61adadd.png)
 
@@ -20,27 +23,33 @@
 
 ![Divider2](https://cdn.modrinth.com/data/cached_images/046f84f77bfc85d61fc689a56918f56666546ba7.png)
 
-###  Main Features
- - **Interactive Drag Physics:** Easily drag items/blocks by holding Right Click, then move them around smoothly by moving your camera.
- - **Kinetic Throwing:** Want to throw an item? Just flick your mouse and release Right Click to launch it with velocity based on your movement.
- - **Dynamic Weight System:** Heavy items like anvils or swords move slower with noticeable "drag lag", while lighter items like feathers are effortless to swing. Fully configurable via Cloth Config!
- - **Multi-Drag Chain:** Manually chain up to 8 items together to move entire piles of loot at once!
- - **Smart Block Placement:** Drag a placeable block onto a surface, hold, and release to automatically place it down in the world.
-###  Automated Rituals & Block Functions
-*   **Storage Ritual:** Easily drag and drop items near any storage blocks (Chests, Barrels, etc.) to automatically deposit them.
-*   **Crafting Ritual:** Drag a Crafting Table near items to auto-craft on the go! *(Currently supports all Shapeless Recipes).*
-*   **Enchanting Ritual:** Drag an Enchanting Table near Lapis, an enchantable item, and XP orbs. The table automatically absorbs the orbs and enchants the item, complete with a dedicated HUD bar to track stored XP!
-*   **Smithing Ritual:** Drag a Smithing Table near a template, base item, and addition item to auto-craft your netherite or upgraded gear seamlessly.
-*   **Grindstone Ritual:** Drag a Grindstone near 2 identical items to repair and strip enchants (returns XP), or near 1 enchanted item to disenchant only.
-###  Dynamic Tool & Weapon Interactions
-*   **Weapon Swing Damage:** Dragging a Sword, Axe, or Trident fast enough now slashes and damages nearby mobs. The faster you swing, the more damage it deals!
-*   **On-the-go World Interaction:** Interact with the environment dynamically by dragging tools over blocks. Hold `Shift` to trigger secondary actions:
-    *   *Hoe:* Tills farmland (Hold Shift)
-    *   *Shovel:* Creates dirt paths (Hold Shift)
-    *   *Axe:* Strips logs
-    *   *Pickaxe:* Progressively mines blocks (crack stages build up, resets after ~2s idle).
+## Main Features
 
-Fully respects Fortune and Silk Touch!
+- **Interactive Dragging:** Hold **Right Click** to grab dropped items or blocks, then move them by looking around.
+- **Throwing:** Flick your mouse and release **Right Click** to throw an item. The throwing force depends on your movement.
+- **Weight System:** Different items have different weights. Heavy objects like anvils move more slowly, while lighter items are easier to handle. Item weights can be customized through Cloth Config.
+- **Multi-Drag:** Chain up to **8 items** together and move them as a group.
+- **Block Placement:** Drag a placeable block onto a surface, then release to place it directly into the world.
+
+## Automated Rituals & Block Functions
+
+- **Storage:** Drop items near storage blocks (such as Chests or Barrels) to deposit them automatically.
+- **Crafting:** Bring a Crafting Table near nearby items to craft automatically. *(Currently supports shapeless recipes only.)*
+- **Enchanting:** Place an Enchanting Table near Lapis Lazuli, an enchantable item, and XP orbs. The table collects nearby XP and enchants the item. A HUD displays the stored XP.
+- **Smithing:** Bring a Smithing Table near the required template, base item, and addition item to perform smithing automatically.
+- **Grindstone:** Repair two matching items, or remove enchantments from a single enchanted item while returning experience.
+
+## Tool & Weapon Interactions
+
+- **Weapon Damage:** Swing Swords, Axes, or Tridents by dragging them. Faster swings deal more damage.
+- **World Interaction:** Drag tools over blocks to interact with them. Hold **Shift** for secondary actions.
+
+  - **Hoe:** Till farmland
+  - **Shovel:** Create dirt paths
+  - **Axe:** Strip logs
+  - **Pickaxe:** Mine blocks progressively (mining progress resets after about 2 seconds of inactivity)
+
+Supports both **Fortune** and **Silk Touch**.
 
 ![Divider2](https://cdn.modrinth.com/data/cached_images/046f84f77bfc85d61fc689a56918f56666546ba7.png)
 
@@ -48,12 +57,14 @@ Fully respects Fortune and Silk Touch!
 
 ![Divider3](https://cdn.modrinth.com/data/cached_images/2c0fd1512a4a8322281a151e90f7f82baaca0d22.png)
 
-> - **Pick up / Move:** Look at an item and hold **Right Click**. Move your camera to drag it.
-> - **Throw:** Flick your camera and release **Right Click** while moving to launch the item.
-> - **Chain Items (Multi-Drag):** While dragging an item, look at another item and press the **G key** (Default bind, can be changed in Controls) to chain them together (Up to 8 items).
-> - **Place Block:** Drag a block onto a solid surface, hold steady, and release to place it.
+- **Pick Up & Move:** Look at a dropped item, then hold **Right Click** to grab it. Move your camera to drag it around.
+- **Throw:** Flick your camera and release **Right Click** to throw the item. The faster you move, the farther it goes.
+- **Chain Items (Multi-Drag):** While dragging an item, look at another item and press **G** *(default keybind, configurable in Controls)* to chain them together. You can chain up to **8 items**.
+- **Place Blocks:** Drag a placeable block onto a solid surface, then release **Right Click** to place it.
 
-You can follow the clip in the gallery category for more information. ( Some videos maybe don't show enough information because outdated :/ )
+If you're not sure how something works, take a look at the videos in the **Gallery** section.
+
+> **Note:** A few videos are a little outdated and may not include the newest features.
 
 ![Divider3](https://cdn.modrinth.com/data/cached_images/2c0fd1512a4a8322281a151e90f7f82baaca0d22.png)
 
@@ -74,7 +85,7 @@ To run Drag Things smoothly, please ensure you have the following mods installed
 
 You can definitely have other things to improve the visual:
 1. [Smooth Glowing Resource Pack](https://modrinth.com/shader/smoother-glowing): Enhances Minecraft's default glowing outline effect, making chained or targeted items look much cleaner and smoother.
-2. [Item Physic Lite](https://modrinth.com/mod/itemphysic-lite): (Highly Recommended) Adds incredibly satisfying 3D physics to dropped items, making the dragging experience feel twice as immersive! 
+2. [Item Physic Lite](https://modrinth.com/mod/itemphysic-lite): (Highly Recommended) Adds realistic 3D physics to dropped items, making the dragging experience feel even more immersive. 
 
 ![Divider7](https://cdn.modrinth.com/data/cached_images/d42ef044051d358f1f0e65577f2845069902bfe1_0.webp)
 
@@ -83,10 +94,11 @@ You can definitely have other things to improve the visual:
 ![Divider4](https://cdn.modrinth.com/data/cached_images/f7e7beff5d36c7b93c1d29f69e826818cdec14a1.png)
 
 ## Known Issues
-- OptiFine Incompatibility: Using OptiFine (Optifabric) might cause rendering glitches or visual desync when dragging items. I highly recommend switching to Sodium and Iris for a much smoother (and lag-free) experience.
-- Server-Side Delay: On high-ping multiplayer servers, dragged items might stutter slightly due to network latency.
-- Mod Conflicts: Certain mods that completely overhaul item physics or inventory behavior might cause unexpected item drops.
 
-Found a bug that's not listed here? Feel free to open an issue on my [Github page](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric/issues)
+- **OptiFine Compatibility:** Using **OptiFine (OptiFabric)** may cause rendering glitches or visual desynchronization while dragging items. For the best compatibility, consider using **Sodium** and **Iris** instead.
+- **Network Latency:** On multiplayer servers with high ping, dragged items may appear to stutter due to network latency.
+- **Mod Compatibility:** Mods that significantly change item physics or inventory behaviour may not work correctly alongside Drag Things.
+
+Found a bug that's not listed here? Feel free to open an issue on my [GitHub page](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric/issues)
 
 ![Divider5](https://cdn.modrinth.com/data/cached_images/3ac3bec295f9246008fe09ca0c006a7763f227b1.png)
