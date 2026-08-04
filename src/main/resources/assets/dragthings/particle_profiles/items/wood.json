@@ -1,0 +1,7 @@
+{
+  "match": [ { "type": "item_tag", "value": "#minecraft:logs" } ],
+  "priority": 25,
+  "grab":    { "particles": [ { "type": "dragthings:wood_chip", "colorSource": "wood", "count": 3 } ] },
+  "release": { "particles": [ { "type": "dragthings:wood_chip", "colorSource": "wood", "count": 3 } ] },
+  "drag":    { "particles": [ { "type": "dragthings:wood_chip", "colorSource": "wood", "count": 1, "everyN": 2 } ] }
+}

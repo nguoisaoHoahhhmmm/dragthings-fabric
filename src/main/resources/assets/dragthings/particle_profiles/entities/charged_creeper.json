@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "entity_kind", "value": "charged_creeper" } ],
+  "priority": 15,
+  "grab":    { "particles": [ { "type": "dragthings:charge", "count": 6 } ] },
+  "release": { "particles": [ { "type": "dragthings:charge", "count": 6 } ] }
+}

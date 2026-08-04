@@ -7,6 +7,7 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
@@ -30,6 +31,11 @@ public class ItemTooltipRenderer {
     private static final float FADE_OUT_SPEED = 0.20f;
 
     private static final int CONTAINER_SLOTS = 27;
+
+    // Eat progress bar dimensions — sits just under the tooltip text, same
+    // "solid gray bar" visual language as the drag-distance HUD.
+    private static final int EAT_BAR_WIDTH  = 60;
+    private static final int EAT_BAR_HEIGHT = 4;
 
     public static void init() {
         HudRenderCallback.EVENT.register((guiGraphics, tickDelta) -> {
@@ -56,7 +62,14 @@ public class ItemTooltipRenderer {
             }
 
             if (tooltipAlpha > 0.01f && hoveredItem != null) {
-                renderItemTooltip(guiGraphics, hoveredItem, tooltipAlpha);
+                int tooltipBottomY = renderItemTooltip(guiGraphics, hoveredItem, tooltipAlpha);
+
+                // Progress bar draws independently of tooltip fade — it
+                // only exists while a hold is actually in progress, so it
+                // doesn't need its own fade-in/out state.
+                if (EatDrinkHandler.isHolding() && EatDrinkHandler.getHoveredFood() == hoveredItem) {
+                    renderEatProgressBar(guiGraphics, mc, tooltipBottomY);
+                }
             }
         });
     }
@@ -138,8 +151,13 @@ public class ItemTooltipRenderer {
         };
     }
 
-    private static void renderItemTooltip(net.minecraft.client.gui.GuiGraphics graphics,
-                                          ItemEntity itemEntity, float alpha) {
+    /**
+     * @return the Y coordinate just below the last rendered tooltip line,
+     * so the eat-progress bar (if any) can anchor directly under it without
+     * the two needing to recompute layout separately.
+     */
+    private static int renderItemTooltip(net.minecraft.client.gui.GuiGraphics graphics,
+                                         ItemEntity itemEntity, float alpha) {
         Minecraft mc = Minecraft.getInstance();
         int screenWidth  = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
@@ -166,6 +184,8 @@ public class ItemTooltipRenderer {
         ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
         boolean hasEnchantments = enchantments != null && !enchantments.isEmpty();
         boolean isContainer     = isPreviewableContainer(stack);
+        FoodProperties food     = stack.get(DataComponents.FOOD);
+        boolean isFood          = food != null;
 
         if (shiftPressed) {
             if (hasEnchantments) {
@@ -184,7 +204,7 @@ public class ItemTooltipRenderer {
                 for (Component line : buildContainerContentLines(stack)) {
                     lines.add(Component.literal("  ").append(line));
                 }
-            } else {
+            } else if (!isFood) {
                 lines.add(Component.literal("No description")
                         .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
             }
@@ -193,6 +213,13 @@ public class ItemTooltipRenderer {
                     .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
         } else if (isContainer) {
             lines.add(Component.literal("[Shift] for contents")
+                    .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+        }
+
+        // Eat hint is independent of Shift state — it's an action prompt,
+        // not extra info to reveal, so it always shows while food is in view.
+        if (isFood) {
+            lines.add(Component.literal("[R] to eat")
                     .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
         }
 
@@ -206,6 +233,27 @@ public class ItemTooltipRenderer {
             int x = (screenWidth - mc.font.width(line)) / 2;
             graphics.drawString(mc.font, line, x, currentY, textColor, true);
             currentY += lineHeight;
+        }
+
+        return currentY;
+    }
+
+    /**
+     * Solid gray fill bar, same visual language as DragDistanceHudRenderer's
+     * distance bar — a plain background rect plus a foreground rect scaled
+     * by progress, no border/decoration to keep it cheap to draw every frame.
+     */
+    private static void renderEatProgressBar(net.minecraft.client.gui.GuiGraphics graphics,
+                                             Minecraft mc, int topY) {
+        int screenWidth = mc.getWindow().getGuiScaledWidth();
+        int x = (screenWidth - EAT_BAR_WIDTH) / 2;
+        int y = topY + 2;
+
+        graphics.fill(x, y, x + EAT_BAR_WIDTH, y + EAT_BAR_HEIGHT, 0x80404040);
+
+        int filledWidth = (int) (EAT_BAR_WIDTH * EatDrinkHandler.getProgress());
+        if (filledWidth > 0) {
+            graphics.fill(x, y, x + filledWidth, y + EAT_BAR_HEIGHT, 0xFFDCDCDC);
         }
     }
 

@@ -1,0 +1,21 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:wind_charge" }
+  ],
+  "priority": 25,
+  "grab": {
+    "particles": [
+      { "type": "minecraft:wind_burst", "count": 2 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "minecraft:wind_burst", "count": 2 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "minecraft:wind_burst", "count": 1, "everyN": 3 }
+    ]
+  }
+}

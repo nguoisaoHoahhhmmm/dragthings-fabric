@@ -1,0 +1,33 @@
+{
+  "match": [
+    {
+      "type": "item_component",
+      "value": "minecraft:food"
+    }
+  ],
+  "priority": -5,
+  "grab": {
+    "particles": [
+      {
+        "type": "item_icon",
+        "count": 1
+      }
+    ]
+  },
+  "release": {
+    "particles": [
+      {
+        "type": "item_icon",
+        "count": 1
+      }
+    ]
+  },
+  "drag": {
+    "particles": [
+      {
+        "type": "item_icon",
+        "count": 1
+      }
+    ]
+  }
+}

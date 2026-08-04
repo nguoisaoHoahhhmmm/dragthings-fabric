@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "item_id", "value": "minecraft:feather" } ],
+  "priority": 20,
+  "grab":    { "particles": [ { "type": "dragthings:feather", "count": 2, "speedMultiplier": 0.3 } ] },
+  "release": { "particles": [ { "type": "dragthings:feather", "count": 2, "speedMultiplier": 0.3 } ] }
+}

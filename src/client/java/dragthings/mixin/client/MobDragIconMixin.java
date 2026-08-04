@@ -32,6 +32,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * injects AFTER that pushPose, so as long as we cancel() before reaching
  * that point, the two never conflict: either this mixin fully replaces the
  * frame's rendering, or it does nothing and the scale mixin runs as usual.
+ *
+ * FIX: vertical offset used to be entity.getBbHeight() * 0.5 — half the
+ * mob's ORIGINAL (unshrunk) height. For anything taller than a chicken that
+ * put the egg at roughly chest/shoulder height of the full-size mob, which
+ * reads as "floating near the head" once the actual 3D model has shrunk
+ * down to almost nothing beneath it. The egg should sit at the same small
+ * spot the shrunk mob's core actually occupies, so the offset now scales by
+ * the SAME minScale factor the shrink tween uses, not the original height.
  */
 @Mixin(LivingEntityRenderer.class)
 public class MobDragIconMixin {
@@ -58,10 +66,13 @@ public class MobDragIconMixin {
 
         ItemStack eggStack = new ItemStack(eggItem);
 
+        // Half of the SHRUNK height, not the original — puts the egg right
+        // at the small footprint the mob actually occupies now, regardless
+        // of how tall it used to be.
+        float shrunkHalfHeight = entity.getBbHeight() * cfg.getMinScale() * 0.5f;
+
         poseStack.pushPose();
-        // Lift to roughly chest height so it floats where the mob's body
-        // used to be, rather than sitting at its feet.
-        poseStack.translate(0, entity.getBbHeight() * 0.5, 0);
+        poseStack.translate(0, shrunkHalfHeight, 0);
         poseStack.scale(0.7f, 0.7f, 0.7f);
 
         Minecraft.getInstance().getItemRenderer().renderStatic(

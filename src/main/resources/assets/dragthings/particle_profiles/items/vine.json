@@ -1,0 +1,9 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:vine" }
+  ],
+  "priority": 15,
+  "grab": { "particles": [ { "type": "dragthings:vine_chip", "colorSource": "biome_leaf", "count": 4 } ] },
+  "release": { "particles": [ { "type": "dragthings:vine_chip", "colorSource": "biome_leaf", "count": 4 } ] },
+  "drag": { "particles": [ { "type": "dragthings:vine_chip", "colorSource": "biome_leaf", "count": 1, "everyN": 2 } ] }
+}

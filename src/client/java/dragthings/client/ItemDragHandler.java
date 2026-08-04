@@ -2,6 +2,7 @@ package dragthings.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dragthings.client.ChainRenderer;
+import dragthings.client.particle.ParticleEngine;
 import dragthings.Dragthings;
 import dragthings.network.DragItemPayload;
 import dragthings.network.PlaceBlockPayload;
@@ -193,11 +194,11 @@ public class ItemDragHandler {
                 }
 
                 if (cfg.enableParticles) {
-                    DragParticleEffects.spawnBurst(client, draggedItem, 6);
+                    ParticleEngine.spawnItemBurst(client, draggedItem, 6, ParticleEngine.Phase.GRAB);
                 }
 
                 followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear(); followerCatchupTicks.clear();
-                DragParticleEffects.clearTimers();
+                ParticleEngine.clearTimers();
 
                 if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
                     // FIX: previously sent a (0,0,0) placeholder here, since this
@@ -243,7 +244,7 @@ public class ItemDragHandler {
                                 SoundSource.PLAYERS, 0.15f, 1.8f, false
                         );
                     }
-                    if (cfg.enableParticles) DragParticleEffects.spawnBurst(client, hoveredItem, 4);
+                    if (cfg.enableParticles) ParticleEngine.spawnItemBurst(client, hoveredItem, 4, ParticleEngine.Phase.GRAB);
 
                     if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
                         // FIX: same (0,0,0) teleport bug as the leader's start
@@ -359,10 +360,10 @@ public class ItemDragHandler {
                 lastFinalPos = resolvedPos;
 
                 if (cfg.enableParticles) {
-                    DragParticleEffects.tickDragParticles(client, draggedItem, speed);
+                    ParticleEngine.tickItemDrag(client, draggedItem, speed);
                     for (int fi = 0; fi < followers.size(); fi++) {
                         double followerSpeed = followerVel.get(fi).length();
-                        DragParticleEffects.tickDragParticles(client, followers.get(fi), followerSpeed);
+                        ParticleEngine.tickItemDrag(client, followers.get(fi), followerSpeed);
                     }
                 }
 
@@ -558,7 +559,7 @@ public class ItemDragHandler {
 
         if (cfg.enableParticles) {
             int burstCount = avgSpeed > 0.05 ? 10 : 5;
-            DragParticleEffects.spawnBurst(client, draggedItem, burstCount);
+            ParticleEngine.spawnItemBurst(client, draggedItem, burstCount, ParticleEngine.Phase.RELEASE);
         }
 
         if (cfg.enableSound && client.level != null) {
@@ -836,7 +837,7 @@ public class ItemDragHandler {
             f.setGlowingTag(false);
         }
         followers.clear(); followerPos.clear(); followerVel.clear(); followerStuck.clear(); followerCatchupTicks.clear();
-        DragParticleEffects.clearTimers();
+        ParticleEngine.clearTimers();
         ItemSquashStretchHandler.clearAll();
     }
 

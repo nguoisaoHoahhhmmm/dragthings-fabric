@@ -1,0 +1,22 @@
+{
+  "match": [
+    { "type": "item_tag", "value": "#minecraft:swords" },
+    { "type": "item_id",  "value": "minecraft:trident" }
+  ],
+  "priority": 11,
+  "grab": {
+    "particles": [
+      { "type": "dragthings:sparkle", "count": 1, "speedMultiplier": 0.6 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "dragthings:sparkle", "count": 1, "speedMultiplier": 0.6 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "dragthings:sparkle", "count": 1, "everyN": 2 }
+    ]
+  }
+}

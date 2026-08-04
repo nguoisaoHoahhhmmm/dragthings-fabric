@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "entity_id", "value": "minecraft:chicken" } ],
+  "priority": 10,
+  "grab":    { "particles": [ { "type": "dragthings:feather", "count": 4, "speedMultiplier": 0.5 } ] },
+  "release": { "particles": [ { "type": "dragthings:feather", "count": 3, "speedMultiplier": 0.5 } ] }
+}

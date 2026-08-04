@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "item_kind", "value": "enchanted" },{ "type": "item_id", "value": "minecraft:enchanted_book" } ],
+  "priority": 30,
+  "grab":    { "particles": [ { "type": "minecraft:enchant", "count": 3 }, { "type": "minecraft:enchanted_hit", "count": 3, "everyN": 2 } ] },
+  "release": { "particles": [ { "type": "minecraft:enchant", "count": 3 }, { "type": "minecraft:enchanted_hit", "count": 3, "everyN": 2 } ] }
+}

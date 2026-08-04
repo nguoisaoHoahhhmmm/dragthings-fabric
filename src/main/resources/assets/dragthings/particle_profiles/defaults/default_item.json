@@ -1,0 +1,5 @@
+{
+  "match": [ { "type": "item_default" } ],
+  "grab":    { "particles": [ { "type": "minecraft:enchanted_hit", "count": 3 } ] },
+  "release": { "particles": [ { "type": "minecraft:enchanted_hit", "count": 3 } ] }
+}

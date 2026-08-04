@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "entity_id", "value": "minecraft:wither" } ],
+  "priority": 10,
+  "grab":    { "particles": [ { "type": "dragthings:black_bone", "count": 8, "speedMultiplier": 1.4 } ] },
+  "release": { "particles": [ { "type": "dragthings:black_bone", "count": 8, "speedMultiplier": 1.4 } ] }
+}

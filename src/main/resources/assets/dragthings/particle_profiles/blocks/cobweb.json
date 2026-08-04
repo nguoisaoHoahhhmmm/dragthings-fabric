@@ -1,0 +1,7 @@
+{
+  "match": [ { "type": "item_id", "value": "minecraft:cobweb" } ],
+  "priority": 20,
+  "grab": { "particles": [ { "type": "dragthings:cobweb_chip", "count": 3, "speedMultiplier": 0.45 } ] },
+  "release": { "particles": [ { "type": "dragthings:cobweb_chip", "count": 3, "speedMultiplier": 0.45 } ] },
+  "drag": { "particles": [ { "type": "dragthings:cobweb_chip", "count": 1, "everyN": 2, "speedMultiplier": 0.3 } ] }
+}

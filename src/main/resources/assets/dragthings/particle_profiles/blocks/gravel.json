@@ -1,0 +1,16 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:gravel" },
+    { "type": "item_id", "value": "minecraft:suspicious_gravel" }
+  ],
+  "priority": 20,
+  "grab": {
+    "particles": [ { "type": "dust", "color": [123, 120, 115], "scale": 1.0, "count": 4 } ]
+  },
+  "release": {
+    "particles": [ { "type": "dust", "color": [123, 120, 115], "scale": 1.0, "count": 4 } ]
+  },
+  "drag": {
+    "particles": [ { "type": "dust", "color": [123, 120, 115], "scale": 0.75, "count": 2, "everyN": 2 } ]
+  }
+}

@@ -1,5 +1,9 @@
 {
   "textures": [
-    "dragthings:falling_leaf_texture"
+    "dragthings:organic/falling_leaves_0",
+    "dragthings:organic/falling_leaves_1",
+    "dragthings:organic/falling_leaves_2",
+    "dragthings:organic/falling_leaves_3",
+    "dragthings:organic/falling_leaves_4"
   ]
 }

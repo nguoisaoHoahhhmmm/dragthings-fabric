@@ -1,0 +1,12 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:potion" },
+    { "type": "item_id", "value": "minecraft:splash_potion" },
+    { "type": "item_id", "value": "minecraft:lingering_potion" },
+    { "type": "item_id", "value": "minecraft:ominous_bottle" }
+  ],
+  "priority": 20,
+  "grab":    { "particles": [ { "type": "colored_effect", "colorSource": "potion_contents", "count": 1 } ] },
+  "release": { "particles": [ { "type": "colored_effect", "colorSource": "potion_contents", "count": 1 } ] },
+  "drag":    { "particles": [ { "type": "colored_effect", "colorSource": "potion_contents", "count": 1 } ] }
+}

@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "item_id", "value": "minecraft:water_bucket" } ],
+  "priority": 20,
+  "grab":    { "particles": [ { "type": "minecraft:splash", "count": 3, "speedMultiplier": 0.5 }, { "type": "minecraft:bubble", "count": 2, "everyN": 2, "speedMultiplier": 0.2 } ] },
+  "release": { "particles": [ { "type": "minecraft:splash", "count": 3, "speedMultiplier": 0.5 }, { "type": "minecraft:bubble", "count": 2, "everyN": 2, "speedMultiplier": 0.2 } ] }
+}

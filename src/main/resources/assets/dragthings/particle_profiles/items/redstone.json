@@ -1,0 +1,26 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:redstone" },
+    { "type": "item_id", "value": "minecraft:repeater" },
+    { "type": "item_id", "value": "minecraft:comparator" },
+    { "type": "item_id", "value": "minecraft:redstone_torch" }
+  ],
+  "priority": 20,
+  "grab": {
+    "particles": [
+      { "type": "dragthings:charge", "count": 2 },
+      { "type": "dust", "color": [220, 20, 20], "scale": 1.2, "count": 3 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "dragthings:charge", "count": 2 },
+      { "type": "dust", "color": [220, 20, 20], "scale": 1.2, "count": 3 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "dust", "color": [220, 20, 20], "scale": 1.0, "count": 1, "everyN": 2 }
+    ]
+  }
+}

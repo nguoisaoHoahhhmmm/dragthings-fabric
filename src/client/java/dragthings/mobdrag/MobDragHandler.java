@@ -8,17 +8,22 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import dragthings.client.DragThingsConfig;
 import dragthings.client.ItemDragHandler;
 import dragthings.network.MobDragPayload;
 import dragthings.client.ItemTrailRenderer;
 import dragthings.client.ChainRenderer;
+import dragthings.client.particle.ParticleEngine;
 import java.util.Collections;
 import java.util.List;
 
@@ -155,6 +160,18 @@ public class MobDragHandler {
             ItemTrailRenderer.tickTrail(draggedMob, Collections.emptyList());
             ChainRenderer.update(draggedMob, Collections.emptyList());
 
+            if (cfg.enableSound) {
+                client.level.playLocalSound(
+                        draggedMob.getX(), draggedMob.getY(), draggedMob.getZ(),
+                        resolveGrabSound(draggedMob),
+                        SoundSource.NEUTRAL, 1.0f, 1.1f, false
+                );
+            }
+
+            if (cfg.enableParticles) {
+                ParticleEngine.spawnMobBurst(client, draggedMob, 5, ParticleEngine.Phase.GRAB);
+            }
+
             ClientPlayNetworking.send(new MobDragPayload(
                     draggedMob.getId(),
                     draggedMob.getX(), draggedMob.getY(), draggedMob.getZ(),
@@ -227,6 +244,21 @@ public class MobDragHandler {
 
     private static void release(Minecraft client, Vec3 throwVelocity) {
         if (draggedMob != null) {
+            // Only play the release sound if the mob is still alive — if it
+            // died mid-drag, the death sound already covers that moment and
+            // a cheerful "pop" on top of it would feel wrong.
+            if (draggedMob.isAlive() && DragThingsConfig.get().enableSound) {
+                client.level.playLocalSound(
+                        draggedMob.getX(), draggedMob.getY(), draggedMob.getZ(),
+                        resolveGrabSound(draggedMob),
+                        SoundSource.NEUTRAL, 1.0f, 0.85f, false
+                );
+            }
+
+            if (draggedMob.isAlive() && DragThingsConfig.get().enableParticles) {
+                ParticleEngine.spawnMobBurst(client, draggedMob, 4, ParticleEngine.Phase.RELEASE);
+            }
+
             ClientPlayNetworking.send(new MobDragPayload(
                     draggedMob.getId(),
                     draggedMob.getX(), draggedMob.getY(), draggedMob.getZ(),
@@ -251,6 +283,21 @@ public class MobDragHandler {
 
         ItemTrailRenderer.clearAll();
         ChainRenderer.clearAll();
+    }
+
+    /**
+     * The mob's own idle/ambient sound (moo, baa, growl...) — accessible
+     * via the accessWidener since Mob.getAmbientSound() is protected.
+     * Falls back to the old chorus-fruit blip for anything that isn't a
+     * Mob (e.g. an ArmorStand, if allowed through as "passive") or that has
+     * no ambient sound defined (silent mobs).
+     */
+    private static SoundEvent resolveGrabSound(LivingEntity entity) {
+        if (entity instanceof Mob mob) {
+            SoundEvent ambient = mob.getAmbientSound();
+            if (ambient != null) return ambient;
+        }
+        return SoundEvents.CHORUS_FRUIT_TELEPORT;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

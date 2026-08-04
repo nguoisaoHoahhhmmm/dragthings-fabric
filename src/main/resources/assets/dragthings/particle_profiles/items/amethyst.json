@@ -1,0 +1,11 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:amethyst_shard" },
+    { "type": "item_id", "value": "minecraft:amethyst_block" },
+    { "type": "item_id", "value": "minecraft:budding_amethyst" }
+  ],
+  "priority": 25,
+  "grab":    { "particles": [ { "type": "dragthings:amethyst_shard", "count": 3 } ] },
+  "release": { "particles": [ { "type": "dragthings:amethyst_shard", "count": 3 } ] },
+  "drag":    { "particles": [ { "type": "dragthings:amethyst_shard", "count": 1, "everyN": 3 } ] }
+}

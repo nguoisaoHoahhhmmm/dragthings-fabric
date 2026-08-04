@@ -1,0 +1,5 @@
+{
+  "match": [ { "type": "entity_default" } ],
+  "grab":    { "particles": [ { "type": "minecraft:poof", "count": 4 } ] },
+  "release": { "particles": [ { "type": "minecraft:cloud", "count": 3 } ] }
+}

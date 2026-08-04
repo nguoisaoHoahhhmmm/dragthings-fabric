@@ -1,0 +1,11 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:wheat" },
+    { "type": "item_id", "value": "minecraft:wheat_seeds" },
+    { "type": "item_id", "value": "minecraft:hay_block" }
+  ],
+  "priority": 20,
+  "grab": { "particles": [ { "type": "dragthings:wheat_chip", "count": 3, "speedMultiplier": 0.55 } ] },
+  "release": { "particles": [ { "type": "dragthings:wheat_chip", "count": 3, "speedMultiplier": 0.55 } ] },
+  "drag": { "particles": [ { "type": "dragthings:wheat_chip", "count": 1, "everyN": 2, "speedMultiplier": 0.4 } ] }
+}

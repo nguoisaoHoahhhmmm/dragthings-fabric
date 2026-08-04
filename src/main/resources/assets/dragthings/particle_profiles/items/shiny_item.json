@@ -1,0 +1,21 @@
+{
+  "//": "Gems + ingots (beacon_payment_items covers iron/gold/netherite ingot + diamond + emerald; the rest listed by id since they aren't in that tag) + all ore blocks (#minecraft:ores tag) + raw ore blocks (not covered by #minecraft:ores).",
+  "match": [
+    { "type": "item_tag", "value": "#minecraft:beacon_payment_items" },
+    { "type": "item_id",  "value": "minecraft:copper_ingot" },
+    { "type": "item_id",  "value": "minecraft:amethyst_shard" },
+    { "type": "item_id",  "value": "minecraft:quartz" },
+    { "type": "item_id",  "value": "minecraft:netherite_scrap" },
+    { "type": "item_id",  "value": "minecraft:raw_iron" },
+    { "type": "item_id",  "value": "minecraft:raw_gold" },
+    { "type": "item_id",  "value": "minecraft:raw_copper" },
+    { "type": "item_id",  "value": "minecraft:raw_iron_block" },
+    { "type": "item_id",  "value": "minecraft:raw_gold_block" },
+    { "type": "item_id",  "value": "minecraft:raw_copper_block" },
+    { "type": "item_tag", "value": "#minecraft:ores" }
+  ],
+  "priority": 15,
+  "grab":    { "particles": [ { "type": "dragthings:sparkle", "count": 1 } ] },
+  "release": { "particles": [ { "type": "dragthings:sparkle", "count": 1 } ] },
+  "drag":    { "particles": [ { "type": "dragthings:sparkle", "count": 1, "everyN": 3 } ] }
+}

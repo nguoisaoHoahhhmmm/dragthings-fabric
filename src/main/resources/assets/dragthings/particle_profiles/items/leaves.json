@@ -1,0 +1,10 @@
+{
+  "match": [
+    { "type": "item_tag", "value": "#minecraft:small_flowers" },
+    { "type": "item_tag", "value": "#minecraft:tall_flowers" }
+  ],
+  "priority": 20,
+  "grab": { "particles": [ { "type": "dragthings:leaf_chip", "colorSource": "flower", "count": 4 } ] },
+  "release": { "particles": [ { "type": "dragthings:leaf_chip", "colorSource": "flower", "count": 4 } ] },
+  "drag": { "particles": [ { "type": "dragthings:leaf_chip", "colorSource": "flower", "count": 1, "everyN": 2 } ] }
+}

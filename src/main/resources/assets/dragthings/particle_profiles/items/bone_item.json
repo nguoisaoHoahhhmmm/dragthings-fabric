@@ -1,0 +1,10 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:bone" },
+    { "type": "item_id", "value": "minecraft:skeleton_skull" },
+    { "type": "item_id", "value": "minecraft:bone_block" }
+  ],
+  "priority": 20,
+  "grab":    { "particles": [ { "type": "dragthings:white_bone", "count": 1, "speedMultiplier": 0.5 } ] },
+  "release": { "particles": [ { "type": "dragthings:white_bone", "count": 1, "speedMultiplier": 0.5 } ] }
+}

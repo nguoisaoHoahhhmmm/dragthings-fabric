@@ -1,0 +1,23 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:totem_of_undying" }
+  ],
+  "priority": 25,
+  "grab": {
+    "particles": [
+      { "type": "minecraft:totem_of_undying", "count": 4 },
+      { "type": "minecraft:soul", "count": 2 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "minecraft:totem_of_undying", "count": 4 },
+      { "type": "minecraft:soul", "count": 2 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "minecraft:totem_of_undying", "count": 1, "everyN": 3 }
+    ]
+  }
+}

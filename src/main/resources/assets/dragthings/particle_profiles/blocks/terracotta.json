@@ -1,0 +1,25 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:terracotta" },
+    { "type": "item_id", "value": "minecraft:white_terracotta" },
+    { "type": "item_id", "value": "minecraft:orange_terracotta" },
+    { "type": "item_id", "value": "minecraft:magenta_terracotta" },
+    { "type": "item_id", "value": "minecraft:light_blue_terracotta" },
+    { "type": "item_id", "value": "minecraft:yellow_terracotta" },
+    { "type": "item_id", "value": "minecraft:lime_terracotta" },
+    { "type": "item_id", "value": "minecraft:pink_terracotta" },
+    { "type": "item_id", "value": "minecraft:gray_terracotta" },
+    { "type": "item_id", "value": "minecraft:light_gray_terracotta" },
+    { "type": "item_id", "value": "minecraft:cyan_terracotta" },
+    { "type": "item_id", "value": "minecraft:purple_terracotta" },
+    { "type": "item_id", "value": "minecraft:blue_terracotta" },
+    { "type": "item_id", "value": "minecraft:brown_terracotta" },
+    { "type": "item_id", "value": "minecraft:green_terracotta" },
+    { "type": "item_id", "value": "minecraft:red_terracotta" },
+    { "type": "item_id", "value": "minecraft:black_terracotta" }
+  ],
+  "priority": 25,
+  "grab": { "particles": [ { "type": "dragthings:terracotta_chip", "colorSource": "terracotta", "count": 3 } ] },
+  "release": { "particles": [ { "type": "dragthings:terracotta_chip", "colorSource": "terracotta", "count": 3 } ] },
+  "drag": { "particles": [ { "type": "dragthings:terracotta_chip", "colorSource": "terracotta", "count": 1, "everyN": 2 } ] }
+}

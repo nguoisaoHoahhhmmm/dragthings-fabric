@@ -1,0 +1,76 @@
+[
+  {
+    "match": [
+      {
+        "type": "item_id",
+        "value": "minecraft:sculk"
+      },
+      {
+        "type": "item_id",
+        "value": "minecraft:sculk_catalyst"
+      },
+      {
+        "type": "item_id",
+        "value": "minecraft:sculk_sensor"
+      },
+      {
+        "type": "item_id",
+        "value": "minecraft:sculk_shrieker"
+      }
+    ],
+    "priority": 15,
+    "grab": {
+      "particles": [
+        {
+          "type": "minecraft:sculk_soul",
+          "count": 5,
+          "speedMultiplier": 0.7
+        }
+      ]
+    },
+    "release": {
+      "particles": [
+        {
+          "type": "minecraft:sculk_soul",
+          "count": 5,
+          "speedMultiplier": 0.7
+        }
+      ]
+    },
+    "drag": {
+      "particles": [
+        {
+          "type": "minecraft:sculk_soul",
+          "count": 2,
+          "everyN": 2,
+          "speedMultiplier": 0.5
+        }
+      ],
+      "minIntervalTicks": 2,
+      "maxIntervalTicks": 5
+    }
+  },
+  {  "match": [
+    { "type": "item_id", "value": "minecraft:calibrated_sculk_sensor" }
+  ],
+    "priority": 15,
+    "grab": {
+      "particles": [
+        { "type": "minecraft:sculk_soul", "count": 5, "speedMultiplier": 0.7 },
+        { "type": "dragthings:amethyst_shard", "count": 3 }
+      ]
+    },
+    "release": {
+      "particles": [
+        { "type": "minecraft:sculk_soul", "count": 5, "speedMultiplier": 0.7 },
+        { "type": "dragthings:amethyst_shard", "count": 3 }
+      ]
+    },
+    "drag": {
+      "particles": [
+        { "type": "minecraft:sculk_soul", "count": 2, "everyN": 2, "speedMultiplier": 0.5 },
+        { "type": "dragthings:amethyst_shard", "count": 1, "everyN": 3}
+      ]
+    }
+  }
+  ]

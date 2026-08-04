@@ -1,0 +1,16 @@
+{
+  "match": [ { "type": "item_tag", "value": "#minecraft:dyes" } ],
+  "priority": 20,
+  "grab": {
+    "particles": [
+      { "type": "dust", "colorSource": "dye", "scale": 1.0, "count": 3 },
+      { "type": "dust", "colorSource": "dye_light", "scale": 0.6, "count": 3, "everyN": 2 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "dust", "colorSource": "dye", "scale": 1.0, "count": 3 },
+      { "type": "dust", "colorSource": "dye_light", "scale": 0.6, "count": 3, "everyN": 2 }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:snow" },
+    { "type": "item_id", "value": "minecraft:snow_block" },
+    { "type": "item_id", "value": "minecraft:powder_snow" },
+    { "type": "item_id", "value": "minecraft:snowball" }
+  ],
+  "priority": 20,
+  "grab": {
+    "particles": [ { "type": "dragthings:snow_chip", "count": 4, "speedMultiplier": 0.55 } ]
+  },
+  "release": {
+    "particles": [ { "type": "dragthings:snow_chip", "count": 4, "speedMultiplier": 0.55 } ]
+  },
+  "drag": {
+    "particles": [ { "type": "dragthings:snow_chip", "count": 2, "everyN": 2, "speedMultiplier": 0.35 } ]
+  }
+}

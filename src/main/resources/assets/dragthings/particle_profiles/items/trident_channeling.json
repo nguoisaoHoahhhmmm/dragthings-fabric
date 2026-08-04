@@ -1,0 +1,7 @@
+{
+  "match": [ { "type": "item_kind", "value": "channeling" } ],
+  "priority": 35,
+  "grab":    { "particles": [ { "type": "dragthings:charge", "count": 4 } ] },
+  "release": { "particles": [ { "type": "dragthings:charge", "count": 4 } ] },
+  "drag":    { "particles": [ { "type": "dragthings:charge", "count": 1, "everyN": 2 } ] }
+}

@@ -1,0 +1,19 @@
+{
+  "match": [
+    { "type": "item_tag", "value": "#minecraft:planks" },
+    { "type": "item_tag", "value": "#minecraft:fence" },
+    { "type": "item_tag", "value": "#minecraft:fence_gates" },
+    { "type": "item_tag", "value": "#minecraft:doors" },
+    { "type": "item_tag", "value": "#minecraft:trapdoors" },
+    { "type": "item_tag", "value": "#minecraft:wooden_slabs" },
+    { "type": "item_tag", "value": "#minecraft:wooden_stairs" },
+    { "type": "item_tag", "value": "#minecraft:wooden_buttons" },
+    { "type": "item_tag", "value": "#minecraft:wooden_pressure_plates" },
+    { "type": "item_tag", "value": "#minecraft:signs" },
+    { "type": "item_tag", "value": "#minecraft:hanging_signs" }
+  ],
+  "priority": 25,
+  "grab": { "particles": [ { "type": "dragthings:plank_chip", "colorSource": "plank", "count": 3 } ] },
+  "release": { "particles": [ { "type": "dragthings:plank_chip", "colorSource": "plank", "count": 3 } ] },
+  "drag": { "particles": [ { "type": "dragthings:plank_chip", "colorSource": "plank", "count": 1, "everyN": 2 } ] }
+}

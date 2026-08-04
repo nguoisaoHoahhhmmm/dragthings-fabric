@@ -1,0 +1,27 @@
+{
+  "match": [
+    {
+      "type": "item_id",
+      "value": "minecraft:cherry_leaves"
+    }
+  ],
+  "priority": 15,
+  "grab": {
+    "particles": [
+      {
+        "type": "minecraft:cherry_leaves",
+        "count": 3,
+        "speedMultiplier": 0.05
+      }
+    ]
+  },
+  "release": {
+    "particles": [
+      {
+        "type": "minecraft:cherry_leaves",
+        "count": 3,
+        "speedMultiplier": 0.05
+      }
+    ]
+  }
+}

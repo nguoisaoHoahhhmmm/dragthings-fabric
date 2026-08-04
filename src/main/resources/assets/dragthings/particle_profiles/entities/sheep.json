@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "entity_id", "value": "minecraft:sheep" } ],
+  "priority": 10,
+  "grab":    { "particles": [ { "type": "wool_colored", "colorSource": "sheep_wool", "count": 5 } ] },
+  "release": { "particles": [ { "type": "wool_colored", "colorSource": "sheep_wool", "count": 4 } ] }
+}

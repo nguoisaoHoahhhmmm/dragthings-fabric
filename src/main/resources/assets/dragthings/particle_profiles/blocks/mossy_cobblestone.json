@@ -1,0 +1,27 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:mossy_cobblestone" },
+    { "type": "item_id", "value": "minecraft:mossy_cobblestone_slab" },
+    { "type": "item_id", "value": "minecraft:mossy_cobblestone_stair" },
+    { "type": "item_id", "value": "minecraft:mossy_cobblestone_wall" }
+  ],
+  "priority": 30,
+  "grab": {
+    "particles": [
+      { "type": "dragthings:cobblestone_chip", "colorSource": "stone", "count": 2 },
+      { "type": "dragthings:grass_chip", "count": 2 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "dragthings:cobblestone_chip", "colorSource": "stone", "count": 2 },
+      { "type": "dragthings:grass_chip", "count": 2 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "dragthings:cobblestone_chip", "colorSource": "stone", "count": 1, "everyN": 2 },
+      { "type": "dragthings:grass_chip", "count": 1, "everyN": 2 }
+    ]
+  }
+}

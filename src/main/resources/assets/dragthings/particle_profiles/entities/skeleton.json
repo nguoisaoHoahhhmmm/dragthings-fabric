@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "entity_id", "value": "minecraft:skeleton" } ],
+  "priority": 10,
+  "grab":    { "particles": [ { "type": "dragthings:white_bone", "count": 5 } ] },
+  "release": { "particles": [ { "type": "dragthings:white_bone", "count": 4 } ] }
+}

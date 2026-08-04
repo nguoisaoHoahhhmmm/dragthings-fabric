@@ -1,0 +1,22 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:moss_block" },
+    { "type": "item_id", "value": "minecraft:moss_carpet" },
+    { "type": "item_id", "value": "minecraft:mossy_stone_bricks" },
+    { "type": "item_id", "value": "minecraft:mossy_stone_bricks_slab" },
+    { "type": "item_id", "value": "minecraft:mossy_stone_bricks_stair" },
+    { "type": "item_id", "value": "minecraft:mossy_stone_bricks_wall" },
+    { "type": "item_id", "value": "minecraft:vine" },
+    { "type": "item_id", "value": "minecraft:glow_lichen" }
+  ],
+  "priority": 30,
+  "grab": {
+    "particles": [ { "type": "dragthings:grass_chip", "count": 3 } ]
+  },
+  "release": {
+    "particles": [ { "type": "dragthings:grass_chip", "count": 3 } ]
+  },
+  "drag": {
+    "particles": [ { "type": "dragthings:grass_chip", "count": 1, "everyN": 2 } ]
+  }
+}

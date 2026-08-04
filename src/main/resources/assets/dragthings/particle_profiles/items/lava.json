@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "item_id", "value": "minecraft:lava_bucket" } ],
+  "priority": 20,
+  "grab":    { "particles": [ { "type": "minecraft:lava", "count": 2, "speedMultiplier": 0.05 }, { "type": "minecraft:smoke", "count": 2, "everyN": 2, "speedMultiplier": 0.2 } ] },
+  "release": { "particles": [ { "type": "minecraft:lava", "count": 2, "speedMultiplier": 0.05 }, { "type": "minecraft:smoke", "count": 2, "everyN": 2, "speedMultiplier": 0.2 } ] }
+}

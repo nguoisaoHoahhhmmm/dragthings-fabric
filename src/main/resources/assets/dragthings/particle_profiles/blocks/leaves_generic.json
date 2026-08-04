@@ -1,0 +1,27 @@
+{
+  "match": [
+    {
+      "type": "item_kind",
+      "value": "leaves"
+    }
+  ],
+  "priority": 5,
+  "grab": {
+    "particles": [
+      {
+        "type": "falling_leaf_biome",
+        "count": 3,
+        "colorSource": "biome_leaf"
+      }
+    ]
+  },
+  "release": {
+    "particles": [
+      {
+        "type": "falling_leaf_biome",
+        "count": 3,
+        "colorSource": "biome_leaf"
+      }
+    ]
+  }
+}

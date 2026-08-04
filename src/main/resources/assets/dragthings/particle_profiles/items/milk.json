@@ -1,0 +1,6 @@
+{
+  "match": [ { "type": "item_id", "value": "minecraft:milk_bucket" } ],
+  "priority": 20,
+  "grab":    { "particles": [ { "type": "colored_effect", "color": [255, 248, 238], "count": 2 } ] },
+  "release": { "particles": [ { "type": "colored_effect", "color": [255, 248, 238], "count": 2 } ] }
+}

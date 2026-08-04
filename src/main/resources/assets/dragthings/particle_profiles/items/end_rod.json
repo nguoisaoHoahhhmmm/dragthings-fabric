@@ -1,0 +1,23 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:end_rod" },
+    { "type": "item_id", "value": "minecraft:purpur_pillar" },
+    { "type": "item_id", "value": "minecraft:purpur_block" }
+  ],
+  "priority": 20,
+  "grab": {
+    "particles": [
+      { "type": "minecraft:end_rod", "count": 2 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "minecraft:end_rod", "count": 2 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "minecraft:end_rod", "count": 1, "everyN": 2 }
+    ]
+  }
+}

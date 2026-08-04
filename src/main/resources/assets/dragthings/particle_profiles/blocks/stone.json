@@ -1,0 +1,44 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:stone" },
+    { "type": "item_id", "value": "minecraft:stone_slab" },
+    { "type": "item_id", "value": "minecraft:stone_stairs" },
+    { "type": "item_id", "value": "minecraft:cobblestone" },
+    { "type": "item_id", "value": "minecraft:cobblestone_slab" },
+    { "type": "item_id", "value": "minecraft:cobblestone_stairs" },
+    { "type": "item_id", "value": "minecraft:cobblestone_wall" },
+    { "type": "item_id", "value": "minecraft:smooth_stone" },
+    { "type": "item_id", "value": "minecraft:granite" },
+    { "type": "item_id", "value": "minecraft:polished_granite" },
+    { "type": "item_id", "value": "minecraft:diorite" },
+    { "type": "item_id", "value": "minecraft:polished_diorite" },
+    { "type": "item_id", "value": "minecraft:andesite" },
+    { "type": "item_id", "value": "minecraft:polished_andesite" },
+    { "type": "item_id", "value": "minecraft:deepslate" },
+    { "type": "item_id", "value": "minecraft:cobbled_deepslate" },
+    { "type": "item_id", "value": "minecraft:polished_deepslate" },
+    { "type": "item_id", "value": "minecraft:deepslate_bricks" },
+    { "type": "item_id", "value": "minecraft:deepslate_tiles" },
+    { "type": "item_id", "value": "minecraft:tuff" },
+    { "type": "item_id", "value": "minecraft:polished_tuff" },
+    { "type": "item_id", "value": "minecraft:tuff_bricks" },
+    { "type": "item_id", "value": "minecraft:calcite" },
+    { "type": "item_id", "value": "minecraft:dripstone_block" },
+    { "type": "item_id", "value": "minecraft:blackstone" },
+    { "type": "item_id", "value": "minecraft:polished_blackstone" },
+    { "type": "item_id", "value": "minecraft:polished_blackstone_bricks" },
+    { "type": "item_id", "value": "minecraft:basalt" },
+    { "type": "item_id", "value": "minecraft:smooth_basalt" },
+    { "type": "item_id", "value": "minecraft:end_stone" }
+  ],
+  "priority": 20,
+  "grab": {
+    "particles": [ { "type": "dragthings:cobblestone_chip", "colorSource": "stone", "count": 3 } ]
+  },
+  "release": {
+    "particles": [ { "type": "dragthings:cobblestone_chip", "colorSource": "stone", "count": 3 } ]
+  },
+  "drag": {
+    "particles": [ { "type": "dragthings:cobblestone_chip", "colorSource": "stone", "count": 1, "everyN": 2 } ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:red_sand" }
+  ],
+  "priority": 20,
+  "grab": {
+    "particles": [ { "type": "dust", "color": [190, 102, 33], "scale": 1.1, "count": 4 } ]
+  },
+  "release": {
+    "particles": [ { "type": "dust", "color": [190, 102, 33], "scale": 1.1, "count": 4 } ]
+  },
+  "drag": {
+    "particles": [ { "type": "dust", "color": [190, 102, 33], "scale": 0.8, "count": 2, "everyN": 2 } ]
+  }
+}

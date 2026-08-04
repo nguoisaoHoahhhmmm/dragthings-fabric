@@ -1,0 +1,21 @@
+{
+  "match": [
+    { "type": "item_tag", "value": "#minecraft:enchantable" }
+  ],
+  "priority": 5,
+  "grab": {
+    "particles": [
+      { "type": "minecraft:enchant", "count": 3 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "minecraft:enchant", "count": 3 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "minecraft:enchant", "count": 1, "everyN": 3 }
+    ]
+  }
+}

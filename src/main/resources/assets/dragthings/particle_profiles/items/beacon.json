@@ -1,0 +1,21 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:beacon" }
+  ],
+  "priority": 25,
+  "grab": {
+    "particles": [
+      { "type": "minecraft:end_rod", "count": 3 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "minecraft:end_rod", "count": 3 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "minecraft:end_rod", "count": 1, "everyN": 2 }
+    ]
+  }
+}

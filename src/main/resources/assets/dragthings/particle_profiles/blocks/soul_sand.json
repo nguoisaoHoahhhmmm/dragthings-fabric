@@ -1,0 +1,23 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:soul_sand" }
+  ],
+  "priority": 15,
+  "grab": {
+    "particles": [
+      { "type": "minecraft:soul", "count": 6, "speedMultiplier": 0.7 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "minecraft:soul", "count": 6, "speedMultiplier": 0.7 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "minecraft:soul", "count": 2, "everyN": 2, "speedMultiplier": 0.5 }
+    ],
+    "minIntervalTicks": 2,
+    "maxIntervalTicks": 5
+  }
+}

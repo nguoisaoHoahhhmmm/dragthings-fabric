@@ -1,0 +1,39 @@
+{
+  "match": [
+    {
+      "type": "item_kind",
+      "value": "block"
+    }
+  ],
+  "priority": 0,
+  "grab": {
+    "particles": [
+      {
+        "type": "minecraft:poof",
+        "count": 3,
+        "speedMultiplier": 0.6
+      },
+      {
+        "type": "minecraft:cloud",
+        "count": 3,
+        "everyN": 2,
+        "speedMultiplier": 0.2
+      }
+    ]
+  },
+  "release": {
+    "particles": [
+      {
+        "type": "minecraft:poof",
+        "count": 3,
+        "speedMultiplier": 0.6
+      },
+      {
+        "type": "minecraft:cloud",
+        "count": 3,
+        "everyN": 2,
+        "speedMultiplier": 0.2
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "match": [
+    {
+      "type": "item_kind",
+      "value": "armor"
+    }
+  ],
+  "priority": 10,
+  "grab": {
+    "particles": [
+      {
+        "type": "dragthings:sparkle",
+        "count": 1,
+        "speedMultiplier": 0.4
+      },
+      {
+        "type": "dragthings:sparkle",
+        "count": 1,
+        "everyN": 2,
+        "speedMultiplier": 0.4
+      }
+    ]
+  },
+  "release": {
+    "particles": [
+      {
+        "type": "dragthings:sparkle",
+        "count": 1,
+        "speedMultiplier": 0.4
+      },
+      {
+        "type": "dragthings:sparkle",
+        "count": 1,
+        "everyN": 2,
+        "speedMultiplier": 0.4
+      }
+    ]
+  }
+}

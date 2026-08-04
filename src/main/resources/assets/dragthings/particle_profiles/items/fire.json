@@ -1,0 +1,28 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:torch" },
+    { "type": "item_id", "value": "minecraft:campfire" },
+    { "type": "item_id", "value": "minecraft:lantern" }
+  ],
+  "priority": 15,
+  "grab": {
+    "particles": [
+      { "type": "minecraft:flame", "count": 4, "speedMultiplier": 0.8 },
+      { "type": "minecraft:smoke", "count": 2, "speedMultiplier": 0.5 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "minecraft:flame", "count": 4, "speedMultiplier": 0.8 },
+      { "type": "minecraft:smoke", "count": 2, "speedMultiplier": 0.5 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "minecraft:flame", "count": 2, "everyN": 2, "speedMultiplier": 0.6 },
+      { "type": "minecraft:smoke", "count": 1, "everyN": 3, "speedMultiplier": 0.4 }
+    ],
+    "minIntervalTicks": 2,
+    "maxIntervalTicks": 5
+  }
+}

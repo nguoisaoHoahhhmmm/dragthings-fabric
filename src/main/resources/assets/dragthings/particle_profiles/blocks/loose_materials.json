@@ -1,0 +1,16 @@
+{
+  "match": [
+    { "type": "item_id", "value": "minecraft:sand" },
+    { "type": "item_id", "value": "minecraft:suspicious_sand" }
+  ],
+  "priority": 20,
+  "grab": {
+    "particles": [ { "type": "dust", "color": [219, 203, 154], "scale": 1.1, "count": 4 } ]
+  },
+  "release": {
+    "particles": [ { "type": "dust", "color": [219, 203, 154], "scale": 1.1, "count": 4 } ]
+  },
+  "drag": {
+    "particles": [ { "type": "dust", "color": [219, 203, 154], "scale": 0.8, "count": 2, "everyN": 2 } ]
+  }
+}

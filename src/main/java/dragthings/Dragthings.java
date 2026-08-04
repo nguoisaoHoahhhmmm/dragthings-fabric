@@ -46,15 +46,37 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import dragthings.network.EatItemPayload;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 public class Dragthings implements ModInitializer {
 
     public static final String MOD_ID = "physicitem";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    private static void dropContainer(ItemEntity source, ItemStack container) {
+        ItemEntity dropped = new ItemEntity(source.level(),
+                source.getX(), source.getY(), source.getZ(), container);
+        dropped.setDeltaMovement(0, 0.15, 0);
+        source.level().addFreshEntity(dropped);
+    }
 
+    /** Applies the vanilla status effects for golden apples consumed from ItemEntities. */
+    private static void applyGoldenAppleEffects(ServerPlayer player, ItemStack stack) {
+        if (stack.is(Items.GOLDEN_APPLE)) {
+            player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1));
+            player.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 2400, 0));
+        } else if (stack.is(Items.ENCHANTED_GOLDEN_APPLE)) {
+            player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 600, 4));
+            player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 6000, 0));
+            player.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 6000, 0));
+            player.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 2400, 3));
+        }
+    }
     /**
      * Exposes active enchanting-table entity IDs so the XP-orb pickup mixin
      * can freeze orbs near active ritual tables.
@@ -125,7 +147,7 @@ public class Dragthings implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("DragThings v0.2 initialized!");
+        LOGGER.info("DragThings v0.6.0 initialized!");
 
         PayloadTypeRegistry.playC2S().register(DragItemPayload.TYPE, DragItemPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(MobDragPayload.TYPE, MobDragPayload.CODEC);
@@ -133,7 +155,7 @@ public class Dragthings implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(SetCraftingTargetPayload.TYPE, SetCraftingTargetPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(RitualProgressPayload.TYPE, RitualProgressPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(CraftingProgressPayload.TYPE, CraftingProgressPayload.CODEC);
-
+        PayloadTypeRegistry.playC2S().register(EatItemPayload.TYPE, EatItemPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(DragItemPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 ServerPlayer player = context.player();
@@ -309,6 +331,76 @@ public class Dragthings implements ModInitializer {
                     Vec3 throwVec = new Vec3(payload.vx(), payload.vy(), payload.vz());
                     releaseMob(mob, throwVec);
                     playerDraggedMob.remove(player.getUUID());
+                }
+            });
+        });
+        ServerPlayNetworking.registerGlobalReceiver(EatItemPayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                ServerPlayer player = context.player();
+                if (player == null || player.level() == null) return;
+
+                Entity entity = player.level().getEntity(payload.entityId());
+                if (!(entity instanceof ItemEntity itemEntity) || !itemEntity.isAlive()) return;
+
+                double distSq = player.distanceToSqr(itemEntity.getX(), itemEntity.getY(), itemEntity.getZ());
+                if (distSq > 144.0) { // 12 blocks, matches MAX_DRAG_DIST
+                    LOGGER.warn("Player {} tried to eat/drink an item too far away ({} blocks²)",
+                            player.getName().getString(), (int) distSq);
+                    return;
+                }
+
+                ItemStack stack = itemEntity.getItem();
+                FoodProperties food = stack.get(DataComponents.FOOD);
+
+                if (food != null) {
+                    // Food — unchanged from before.
+                    player.getFoodData().eat(food.nutrition(), food.saturation());
+                    applyGoldenAppleEffects(player, stack);
+                    player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                            SoundEvents.GENERIC_EAT, SoundSource.PLAYERS, 1.0F, 1.0F);
+                } else if (stack.is(net.minecraft.world.item.Items.MILK_BUCKET)) {
+                    // Milk clears every active effect, same as drinking it normally.
+                    player.removeAllEffects();
+                    player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                            SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 1.0F, 1.0F);
+                    dropContainer(itemEntity, new ItemStack(net.minecraft.world.item.Items.BUCKET));
+                } else if (stack.is(net.minecraft.world.item.Items.HONEY_BOTTLE)) {
+                    // Honey clears poison specifically (vanilla behavior), no other effect.
+                    player.removeEffect(net.minecraft.world.effect.MobEffects.POISON);
+                    player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                            SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 1.0F, 1.0F);
+                    dropContainer(itemEntity, new ItemStack(net.minecraft.world.item.Items.GLASS_BOTTLE));
+                } else if (stack.is(net.minecraft.world.item.Items.POTION)) {
+                    PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
+                    if (contents != null) {
+                        for (MobEffectInstance effect : contents.getAllEffects()) {
+                            player.addEffect(new MobEffectInstance(effect));
+                        }
+                    }
+                    player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                            SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 1.0F, 1.0F);
+                    dropContainer(itemEntity, new ItemStack(net.minecraft.world.item.Items.GLASS_BOTTLE));
+                } else if (stack.is(net.minecraft.world.item.Items.OMINOUS_BOTTLE)) {
+                    // Amplifier is stored per-stack (0-4 -> Bad Omen I-V); default to 0
+                    // if somehow missing. Duration is always fixed at 120000 ticks
+                    // regardless of amplifier — matches vanilla, potion_duration_scale
+                    // is ignored for this component.
+                    Integer amplifier = stack.get(DataComponents.OMINOUS_BOTTLE_AMPLIFIER);
+                    int amp = amplifier != null ? amplifier : 0;
+                    player.addEffect(new MobEffectInstance(MobEffects.BAD_OMEN, 120000, amp));
+                    player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                            SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 1.0F, 1.0F);
+                    // No dropContainer() call — unlike potion/milk/honey, an ominous
+                    // bottle shatters completely and never leaves a glass bottle behind.
+                } else {
+                    return; // not actually food or a recognized drink — ignore stale/forged requests
+                }
+
+                stack.shrink(1);
+                if (stack.isEmpty()) {
+                    itemEntity.discard();
+                } else {
+                    itemEntity.setItem(stack);
                 }
             });
         });

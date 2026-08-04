@@ -1,0 +1,24 @@
+{
+  "match": [
+    { "type": "item_tag", "value": "#minecraft:pickaxes" },
+    { "type": "item_tag", "value": "#minecraft:axes" },
+    { "type": "item_tag", "value": "#minecraft:shovels" },
+    { "type": "item_tag", "value": "#minecraft:hoes" }
+  ],
+  "priority": 10,
+  "grab": {
+    "particles": [
+      { "type": "dragthings:sparkle", "count": 1, "speedMultiplier": 0.6 }
+    ]
+  },
+  "release": {
+    "particles": [
+      { "type": "dragthings:sparkle", "count": 1, "speedMultiplier": 0.6 }
+    ]
+  },
+  "drag": {
+    "particles": [
+      { "type": "dragthings:sparkle", "count": 1, "everyN": 2 }
+    ]
+  }
+}

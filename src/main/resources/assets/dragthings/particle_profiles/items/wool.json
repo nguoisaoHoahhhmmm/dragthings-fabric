@@ -1,0 +1,7 @@
+{
+  "match": [ { "type": "item_tag", "value": "#minecraft:wool" } ],
+  "priority": 20,
+  "grab":    { "particles": [ { "type": "wool_colored", "colorSource": "wool", "count": 3 } ] },
+  "release": { "particles": [ { "type": "wool_colored", "colorSource": "wool", "count": 3 } ] },
+  "drag":    { "particles": [ { "type": "wool_colored", "colorSource": "wool", "count": 2 } ] }
+}
