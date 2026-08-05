@@ -105,5 +105,5 @@ Found a bug that's not listed here? Feel free to open an issue on my [GitHub pag
 
 ## Credits
 
-This project includes code and assets copied and adapted from Visuality by PinkGoosik, used under the MIT License.
-See `LICENSE-THIRD-PARTY.md` for details.
+This project includes code and assets copied and adapted from [Visuality](https://modrinth.com/mod/visuality) by PinkGoosik, used under the MIT License.
+See [LICENSE-THIRD_PARTY.md](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric/blob/1.21.1/LICENSE-THIRD-PARTY.md) for details.
