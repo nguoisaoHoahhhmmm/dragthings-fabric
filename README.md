@@ -102,3 +102,8 @@ You can definitely have other things to improve the visual:
 Found a bug that's not listed here? Feel free to open an issue on my [GitHub page](https://github.com/nguoisaoHoahhhmmm/dragthings-fabric/issues)
 
 ![Divider5](https://cdn.modrinth.com/data/cached_images/3ac3bec295f9246008fe09ca0c006a7763f227b1.png)
+
+## Credits
+
+This project includes code and assets copied and adapted from Visuality by PinkGoosik, used under the MIT License.
+See `LICENSE-THIRD-PARTY.md` for details.
