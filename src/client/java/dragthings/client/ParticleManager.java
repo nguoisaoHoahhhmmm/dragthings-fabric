@@ -13,10 +13,9 @@ import dragthings.client.particle.WoodChipParticle;
 import dragthings.client.particle.StoneChipParticle;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 
-public class LeaveParticleManager {
+public class ParticleManager {
 
     public static void registerParticles() {
-        // Đăng ký bộ Sprite (Texture) cho hạt lá rơi thông qua Fabric API
         ParticleFactoryRegistry.getInstance().register(ModParticles.FALLING_LEAF, FallingLeafParticle.Provider::new);
         ParticleFactoryRegistry.getInstance().register(ModParticles.WOOL_PARTICLE, WoolParticle.Provider::new);
         ParticleFactoryRegistry.getInstance().register(ModParticles.WHITE_BONE, BoneParticle.Provider::new);

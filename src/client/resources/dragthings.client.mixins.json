@@ -15,7 +15,9 @@
 		"MobDragScaleMixin",
 		"MobDragIconMixin",
 		"MobDragHitboxMixin",
-		"ItemPhysicLiteScaleMixin"
+		"ItemPhysicLiteScaleMixin",
+		"PlayerRendererMixin",
+		"ItemInHandRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

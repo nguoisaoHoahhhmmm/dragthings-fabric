@@ -2,6 +2,7 @@ package dragthings.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dragthings.client.ChainRenderer;
+import dragthings.client.arm.DragArmRenderer;
 import dragthings.client.particle.ParticleEngine;
 import dragthings.Dragthings;
 import dragthings.network.DragItemPayload;
@@ -184,11 +185,12 @@ public class ItemDragHandler {
                 draggedItem.noPhysics = true;
                 draggedItem.setXRot(0f);
                 draggedItem.setYRot(0f);
+                DragArmRenderer.onLocalGrab(draggedItem);
 
                 if (cfg.enableSound) {
                     client.level.playLocalSound(
                             draggedItem.getX(), draggedItem.getY(), draggedItem.getZ(),
-                            SoundEvents.CHORUS_FRUIT_TELEPORT,
+                            SoundEvents.WOOL_BREAK,
                             SoundSource.PLAYERS, 0.18f, 1.6f, false
                     );
                 }
@@ -201,15 +203,6 @@ public class ItemDragHandler {
                 ParticleEngine.clearTimers();
 
                 if (ClientPlayNetworking.canSend(DragItemPayload.TYPE)) {
-                    // FIX: previously sent a (0,0,0) placeholder here, since this
-                    // packet was assumed to be "registration only". But the server
-                    // unconditionally calls item.setPos(payload.x, y, z) on every
-                    // packet, including this one — so that placeholder actually
-                    // teleported the item to the world origin for one tick, which
-                    // then broke every subsequent server-side distance check
-                    // (item.position() was now garbage, far from the player).
-                    // Send the item's real current position instead — a harmless,
-                    // correct position update rather than a destructive placeholder.
                     Vec3 startPos = draggedItem.position();
                     ClientPlayNetworking.send(new DragItemPayload(
                             draggedItem.getId(), startPos.x, startPos.y, startPos.z, true
@@ -240,7 +233,7 @@ public class ItemDragHandler {
                     if (cfg.enableSound) {
                         client.level.playLocalSound(
                                 hoveredItem.getX(), hoveredItem.getY(), hoveredItem.getZ(),
-                                SoundEvents.CHORUS_FRUIT_TELEPORT,
+                                SoundEvents.WOOL_BREAK,
                                 SoundSource.PLAYERS, 0.15f, 1.8f, false
                         );
                     }
@@ -513,7 +506,7 @@ public class ItemDragHandler {
     private static void performRelease(Minecraft client) {
         if (draggedItem == null) return;
         DragThingsConfig cfg = DragThingsConfig.get();
-
+        DragArmRenderer.onLocalRelease();
         Vec3 currentPos = draggedItem.position();
 
         Vec3 avgVelocity = computeWeightedVelocity();
@@ -821,6 +814,7 @@ public class ItemDragHandler {
             draggedItem.noPhysics = false;
             draggedItem.setNoGravity(false);
         }
+        DragArmRenderer.onLocalRelease();
         draggedItem   = null;
         currentVelocity = Vec3.ZERO;
         prevPosition    = Vec3.ZERO;
@@ -849,6 +843,7 @@ public class ItemDragHandler {
             pendingReleaseItem     = null;
             pendingReleaseVelocity = Vec3.ZERO;
         }
+        DragArmRenderer.onLocalRelease();
         ItemTrailRenderer.clearAll();
         ChainRenderer.clearAll();
         clearDragState();

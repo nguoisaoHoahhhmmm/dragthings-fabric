@@ -5,14 +5,15 @@ import dragthings.client.DragDistanceHudRenderer;
 import dragthings.client.DragThingsConfig;
 import dragthings.client.EatDrinkHandler;
 import dragthings.client.ItemCameraShakeHandler;
-import dragthings.client.LeaveParticleManager;
+import dragthings.client.ParticleManager;
 import dragthings.client.ItemDragHandler;
 import dragthings.client.ItemEnchantRitual;
 import dragthings.client.ItemTooltipRenderer;
 import dragthings.client.ItemTrailRenderer;
 import dragthings.client.MobDragTooltipRenderer;
+import dragthings.client.arm.*;
 import dragthings.client.particle.ParticleProfileManager;
-import dragthings.mobdrag.MobDragHandler;
+import dragthings.mobdrag.*;
 import net.fabricmc.api.ClientModInitializer;
 
 public class DragthingsClient implements ClientModInitializer {
@@ -31,7 +32,8 @@ public class DragthingsClient implements ClientModInitializer {
         MobDragHandler.init();
         MobDragTooltipRenderer.init();
         EatDrinkHandler.init();
-        LeaveParticleManager.registerParticles();
+        ParticleManager.registerParticles();
+        DragArmRenderer.init();
         System.out.println("[DragThings] v0.6.0 initialized!");
     }
 }

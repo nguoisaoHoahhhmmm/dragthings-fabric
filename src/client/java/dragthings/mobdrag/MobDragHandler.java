@@ -297,7 +297,7 @@ public class MobDragHandler {
             SoundEvent ambient = mob.getAmbientSound();
             if (ambient != null) return ambient;
         }
-        return SoundEvents.CHORUS_FRUIT_TELEPORT;
+        return SoundEvents.WOOL_BREAK;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

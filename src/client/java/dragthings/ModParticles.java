@@ -8,7 +8,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.fabricmc.fabric.api.particle.v1.FabricParticleTypes;
 
 public class ModParticles {
-    // Sửa chỗ này: Thay 'new SimpleParticleType(false)' bằng 'FabricParticleTypes.simple()'
     public static final SimpleParticleType FALLING_LEAF = FabricParticleTypes.simple();
     public static final SimpleParticleType WOOL_PARTICLE = FabricParticleTypes.simple();
     public static final SimpleParticleType WHITE_BONE = FabricParticleTypes.simple();
