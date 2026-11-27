@@ -1,14 +1,6 @@
 package dragthings.server;
 
-import dragthings.ritual.AnvilRitual;
-import dragthings.ritual.ChestLootRitual;
-import dragthings.ritual.CraftingGridRitual;
-import dragthings.ritual.CraftingRitual;
-import dragthings.ritual.EnchantRitual;
-import dragthings.ritual.EnderChestRitual;
-import dragthings.ritual.FurnaceRitual;
-import dragthings.ritual.GrindstoneRitual;
-import dragthings.ritual.SmithingRitual;
+import dragthings.ritual.*;
 import dragthings.tool.DragToolHandler;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 
@@ -31,9 +23,9 @@ public final class ServerTickHandler {
             FurnaceRitual.tick();
             AnvilRitual.tick();
             CraftingRitual.tick();
-            CraftingGridRitual.tick();
             ChestLootRitual.tick();
             EnderChestRitual.tick();
+            BundleRitual.tick();
         });
     }
 }

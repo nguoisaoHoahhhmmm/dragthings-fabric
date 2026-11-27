@@ -2,6 +2,7 @@ package dragthings.mixin.client;
 
 import dragthings.client.DragThingsConfig;
 import dragthings.client.ItemDragHandler;
+import dragthings.config.GameplayConfig;
 import dragthings.mobdrag.MobDragHandler;
 import net.minecraft.client.MouseHandler;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,7 +18,7 @@ public class ScrollInputMixin {
     @Inject(method = "onScroll(JDD)V", at = @At("HEAD"), cancellable = true)
     private void dragthings$onScrollAdjustDragDistance(long window, double xDelta, double yDelta, CallbackInfo ci) {
         DragThingsConfig cfg = DragThingsConfig.get();
-        if (!cfg.scrollToAdjustDistance) return;
+        if (!GameplayConfig.physics().scrollToAdjustDistance) return;
 
         if (ItemDragHandler.isDragging()) {
             boolean consumed = ItemDragHandler.handleScroll(yDelta);

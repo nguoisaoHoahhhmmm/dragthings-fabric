@@ -1,6 +1,8 @@
 package dragthings.ritual;
 
 import dragthings.Dragthings;
+import dragthings.config.GameplayConfig;
+import dragthings.config.RitualConfig;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -28,12 +30,13 @@ public final class SmithingRitual {
     // player.level() instead of storing it separately.
     private static final Map<Integer, ServerPlayer> activeTables = new ConcurrentHashMap<>();
     private static final Map<Integer, Integer>      cooldown     = new ConcurrentHashMap<>();
-    private static final double RADIUS        = 1;
-    private static final int    COOLDOWN_TICKS = 20;
+    // rituals.json, section "smithing": enabled, radius, cooldownTicks
+    private static RitualConfig.Smithing cfg() { return GameplayConfig.rituals().smithing; }
 
     private SmithingRitual() {}
 
     public static void onStartDrag(int entityId, ServerLevel level, ServerPlayer player) {
+        if (!cfg().enabled) return;
         boolean isNew = !activeTables.containsKey(entityId);
         activeTables.put(entityId, player);
         // Play start sound only on the first registration, not on every sync packet.
@@ -70,14 +73,14 @@ public final class SmithingRitual {
             if (!(e instanceof ItemEntity table) || !table.isAlive()) { it.remove(); cooldown.remove(tableId); continue; }
 
             if (!cooldown.containsKey(tableId) && trySmith(level, table))
-                cooldown.put(tableId, COOLDOWN_TICKS);
+                cooldown.put(tableId, cfg().cooldownTicks);
         }
     }
 
     private static boolean trySmith(ServerLevel level, ItemEntity table) {
-        AABB box = new AABB(table.position(), table.position()).inflate(RADIUS);
+        AABB box = new AABB(table.position(), table.position()).inflate(cfg().radius);
         List<ItemEntity> nearby = level.getEntitiesOfClass(ItemEntity.class, box,
-                i -> i != table && i.isAlive() && !i.getItem().isEmpty());
+                i -> i != table && i.isAlive() && !i.getItem().isEmpty() && !i.hasPickUpDelay());
         if (nearby.size() < 3) return false;
 
         for (RecipeHolder<SmithingRecipe> holder : level.getRecipeManager().getAllRecipesFor(RecipeType.SMITHING)) {

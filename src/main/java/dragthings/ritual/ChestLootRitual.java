@@ -220,6 +220,10 @@ public final class ChestLootRitual {
             chestEntity.getItem().set(
                     net.minecraft.core.component.DataComponents.CONTAINER,
                     net.minecraft.world.item.component.ItemContainerContents.fromItems(slots));
+            // Changing the stack in place is NOT sent to clients (same object, so
+            // the entity data sees no change). Set a copy so the billboard that
+            // shows the contents updates.
+            chestEntity.setItem(chestEntity.getItem().copy());
 
             level.playSound(null, chestEntity.blockPosition(),
                     SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f,

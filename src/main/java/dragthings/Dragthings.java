@@ -1,8 +1,7 @@
 package dragthings;
 
-import dragthings.network.ArmGrabPayload;
-import dragthings.network.ArmStatePayload;
-import dragthings.server.CraftingTargetHandler;
+import dragthings.config.GameplayConfig;
+import dragthings.ritual.*;
 import dragthings.server.DragItemHandler;
 import dragthings.server.EatItemHandler;
 import dragthings.server.MobDragServer;
@@ -10,7 +9,6 @@ import dragthings.server.ModPayloads;
 import dragthings.server.PlaceBlockHandler;
 import dragthings.server.ServerTickHandler;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,17 +42,16 @@ public class Dragthings implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("DragThings v0.6.0 initialized!");
+        LOGGER.info("DragThings v0.6.1 initialized!");
 
         ModPayloads.register();
-
         DragItemHandler.register();
         MobDragServer.register();
         EatItemHandler.register();
         PlaceBlockHandler.register();
-        CraftingTargetHandler.register();
         ServerTickHandler.register();
         ArmSync.init();
-
+        GameplayConfig.load();
+        BundleRitual.registerReceiver();
     }
 }

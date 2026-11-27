@@ -8,7 +8,9 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.Map;
 import java.util.UUID;
@@ -42,9 +44,12 @@ public final class ArmSync {
                     int itemId = payload.itemId();
                     if (itemId >= 0) {
                         Entity e = player.level().getEntity(itemId);
-                        if (!(e instanceof ItemEntity item)
-                                || !item.isAlive()
-                                || player.distanceToSqr(item) > MAX_DIST_SQ) {
+                        // Items, and mobs (never other players).
+                        boolean grabbable = e instanceof ItemEntity
+                                || (e instanceof LivingEntity && !(e instanceof Player));
+                        if (!grabbable
+                                || !e.isAlive()
+                                || player.distanceToSqr(e) > MAX_DIST_SQ) {
                             itemId = -1; // forged or stale request: treat as release
                         }
                     }

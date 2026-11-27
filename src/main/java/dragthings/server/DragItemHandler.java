@@ -3,15 +3,7 @@ package dragthings.server;
 import dragthings.ContainerUtil;
 import dragthings.Dragthings;
 import dragthings.network.DragItemPayload;
-import dragthings.ritual.AnvilRitual;
-import dragthings.ritual.ChestLootRitual;
-import dragthings.ritual.CraftingGridRitual;
-import dragthings.ritual.CraftingRitual;
-import dragthings.ritual.EnchantRitual;
-import dragthings.ritual.EnderChestRitual;
-import dragthings.ritual.FurnaceRitual;
-import dragthings.ritual.GrindstoneRitual;
-import dragthings.ritual.SmithingRitual;
+import dragthings.ritual.*;
 import dragthings.tool.DragToolHandler;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.particles.ParticleTypes;
@@ -95,15 +87,7 @@ public final class DragItemHandler {
         // takes ownership this tick, setPos is skipped.
         ServerLevel gridLevel = (player.level() instanceof ServerLevel sLevel) ? sLevel : null;
         Vec3 gridTargetPos = new Vec3(payload.x(), payload.y(), payload.z());
-        boolean gridHandled = gridLevel != null && CraftingGridRitual.tryHandleDrag(
-                gridLevel, player, item, gridTargetPos, payload.isSneaking());
-        if (gridLevel != null) {
-            CraftingGridRitual.showGridPreview(gridLevel, player, gridTargetPos, payload.isSneaking());
-        }
-
-        if (!gridHandled) {
-            item.setPos(payload.x(), payload.y(), payload.z());
-        }
+        item.setPos(payload.x(), payload.y(), payload.z());
         item.setNoGravity(true);
         item.noPhysics = true;
         item.setDeltaMovement(0, 0, 0);
@@ -132,14 +116,15 @@ public final class DragItemHandler {
     private static void registerRituals(ServerPlayer player, ItemEntity item, DragItemPayload payload) {
         if (!(player.level() instanceof ServerLevel sl)) return;
         int id = payload.entityId();
-
+        if (BundleRitual.isBundle(item.getItem()))
+            BundleRitual.onStartDrag(id, sl, player, payload.isSneaking());
         if (item.getItem().is(Items.ENCHANTING_TABLE)) EnchantRitual.onStartDrag(id, sl, player);
         if (item.getItem().is(Items.SMITHING_TABLE))   SmithingRitual.onStartDrag(id, sl, player);
         if (item.getItem().is(Items.GRINDSTONE))       GrindstoneRitual.onStartDrag(id, sl, player);
         if (item.getItem().is(Items.FURNACE) || item.getItem().is(Items.BLAST_FURNACE) || item.getItem().is(Items.SMOKER))
             FurnaceRitual.onStartDrag(id, sl, player);
         if (item.getItem().is(Items.ANVIL) || item.getItem().is(Items.CHIPPED_ANVIL) || item.getItem().is(Items.DAMAGED_ANVIL))
-            AnvilRitual.onStartDrag(id, sl);
+            AnvilRitual.onStartDrag(id, sl, player);
         if (item.getItem().is(Items.CRAFTING_TABLE))
             CraftingRitual.onStartDrag(id, sl, player);
         if (ContainerUtil.isContainerItem(item.getItem())) {
@@ -182,6 +167,7 @@ public final class DragItemHandler {
         AnvilRitual.onRelease(id);
         CraftingRitual.onRelease(id);
         ChestLootRitual.onRelease(id);
+        BundleRitual.onRelease(id);
         EnderChestRitual.onRelease(id);
         lastDragPos.remove(id);
 

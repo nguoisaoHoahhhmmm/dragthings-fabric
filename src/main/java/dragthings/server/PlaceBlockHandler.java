@@ -1,9 +1,13 @@
 package dragthings.server;
 
 import dragthings.Dragthings;
+import dragthings.config.GameplayConfig;
 import dragthings.network.PlaceBlockPayload;
+import dragthings.ritual.FurnaceRitual;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomModelData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
@@ -32,8 +36,13 @@ public final class PlaceBlockHandler {
                     ServerPlayer player = context.player();
                     if (player == null || !(player.level() instanceof ServerLevel sl)) return;
 
-                    // 1. Not a spectator
+                    // 1. Not a spectator, and placing is allowed at all
                     if (player.isSpectator()) return;
+                    if (!GameplayConfig.physics().enableBlockPlacement) return;
+
+                    // 1b. Shift must be held. The server checks it too, so a modified
+                    // client cannot place blocks without it.
+                    if (GameplayConfig.physics().placeRequiresShift && !player.isShiftKeyDown()) return;
 
                     // 2. Target within reach
                     BlockPos pos = payload.blockPos();
@@ -53,6 +62,11 @@ public final class PlaceBlockHandler {
                     // 4. Target inside world bounds
                     if (!sl.isInWorldBounds(pos)) return;
                     ItemStack stack = itemEntity.getItem().copyWithCount(1);
+                    // A burning furnace is only lit as an item: the placed block starts normal.
+                    CustomModelData cmd = stack.get(DataComponents.CUSTOM_MODEL_DATA);
+                    if (cmd != null && cmd.value() == FurnaceRitual.LIT_MODEL_DATA) {
+                        stack.remove(DataComponents.CUSTOM_MODEL_DATA);
+                    }
 
                     Vec3 hitVec = Vec3.atLowerCornerOf(pos).add(
                             payload.hitX(), payload.hitY(), payload.hitZ());
@@ -96,7 +110,8 @@ public final class PlaceBlockHandler {
                             (snd.getVolume() + 1f) / 2f, snd.getPitch() * 0.8f);
 
                     // Consume one item; discard if empty
-                    ItemStack entityStack = itemEntity.getItem();
+                    // A copy, so the new count is synced to clients.
+                    ItemStack entityStack = itemEntity.getItem().copy();
                     entityStack.shrink(1);
                     if (entityStack.isEmpty()) {
                         itemEntity.discard();

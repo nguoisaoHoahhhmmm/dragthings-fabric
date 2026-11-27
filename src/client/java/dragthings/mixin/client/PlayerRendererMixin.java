@@ -27,5 +27,10 @@ public class PlayerRendererMixin {
             model.rightArm.visible = false;
             model.rightSleeve.visible = false;
         }
+        if (DragArmRenderer.shouldReplaceLeftArm(player)) {
+            PlayerModel<AbstractClientPlayer> model = ((PlayerRenderer) (Object) this).getModel();
+            model.leftArm.visible = false;
+            model.leftSleeve.visible = false;
+        }
     }
 }

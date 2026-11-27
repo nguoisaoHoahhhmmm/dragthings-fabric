@@ -1,6 +1,9 @@
 package dragthings.ritual;
 
 import dragthings.Dragthings;
+import dragthings.config.GameplayConfig;
+import dragthings.config.RitualConfig;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -9,12 +12,15 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomModelData;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -22,8 +28,11 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Furnace ritual: drag a furnace/blast furnace/smoker item, consume fuel to enter
- * "burning" state, then gradually cook nearby ingredients with progress tracking.
+ * Furnace ritual: drag a furnace / blast furnace / smoker, and it cooks the
+ * items lying around it, burning fuel from nearby items.
+ *
+ * Like a real furnace, fuel is only used while there is something to cook, so
+ * a furnace dragged past nothing does not waste its coal.
  */
 public final class FurnaceRitual {
 
@@ -40,67 +49,79 @@ public final class FurnaceRitual {
         }
     }
 
-    /** Tracks cooking progress for a specific item entity. */
+    /** Cooking progress of one item entity. */
     private static final class CookingProgress {
         int cookTime = 0;
         int cookTimeTotal;
-        CookingProgress(int total) { cookTimeTotal = total; }
+        long lastTouched; // serverTick when it last cooked, so abandoned entries can be dropped
+        CookingProgress(int total, long now) { cookTimeTotal = total; lastTouched = now; }
     }
 
-    /** Maps vanilla furnace items to the correct recipe type and cook speed. */
+    /** One ingredient that this furnace can cook right now. */
+    private record Job(ItemEntity ingredient, RecipeHolder<AbstractCookingRecipe> holder) {}
+
+    /** Maps vanilla furnace items to the correct recipe type. */
     public enum FurnaceType {
-        FURNACE   (RecipeType.SMELTING,  200, SoundEvents.FURNACE_FIRE_CRACKLE),
-        BLASTING  (RecipeType.BLASTING,  100, SoundEvents.BLASTFURNACE_FIRE_CRACKLE),
-        SMOKING   (RecipeType.SMOKING,   100, SoundEvents.SMOKER_SMOKE);
+        FURNACE   (RecipeType.SMELTING,  SoundEvents.FURNACE_FIRE_CRACKLE),
+        BLASTING  (RecipeType.BLASTING,  SoundEvents.BLASTFURNACE_FIRE_CRACKLE),
+        SMOKING   (RecipeType.SMOKING,   SoundEvents.SMOKER_SMOKE);
 
         final RecipeType<? extends AbstractCookingRecipe> recipeType;
-        final int defaultCookTime; // ticks to cook (vanilla: 200 for furnace, 100 for blast/smoker)
         final net.minecraft.sounds.SoundEvent sound;
 
-        FurnaceType(RecipeType<? extends AbstractCookingRecipe> r, int cook, net.minecraft.sounds.SoundEvent s) {
-            recipeType = r; defaultCookTime = cook; sound = s;
+        FurnaceType(RecipeType<? extends AbstractCookingRecipe> r, net.minecraft.sounds.SoundEvent s) {
+            recipeType = r; sound = s;
         }
     }
 
-    private static final Map<Integer, BurningState>   activeFurnaces  = new ConcurrentHashMap<>();
-    private static final Map<Integer, CookingProgress> cookingItems   = new ConcurrentHashMap<>();
-    private static final Map<Integer, Integer>        fuelSearchCooldown = new ConcurrentHashMap<>();
+    private static final Map<Integer, BurningState>    activeFurnaces     = new ConcurrentHashMap<>();
+    private static final Map<Integer, CookingProgress> cookingItems       = new ConcurrentHashMap<>();
+    private static final Map<Integer, Integer>         fuelSearchCooldown = new ConcurrentHashMap<>();
 
-    private static final double RADIUS                = 2.0;
-    private static final int    FUEL_SEARCH_COOLDOWN  = 10;  // ticks between fuel checks
-    private static final int    PARTICLE_INTERVAL     = 3;   // spawn particles every N ticks
+    /**
+     * Marker stored in the furnace's CUSTOM_MODEL_DATA while it burns. The item
+     * models in assets/minecraft/models/item/{furnace,blast_furnace,smoker}.json
+     * switch to the "lit" block model when they see this value.
+     */
+    public static final int LIT_MODEL_DATA = 7301;
+
+    private static final int PARTICLE_INTERVAL = 3;    // spawn particles every N ticks
+    private static final int PRUNE_INTERVAL    = 200;  // how often unused progress entries are dropped
+    private static final int PROGRESS_KEEP     = 600;  // ...once untouched this long
+    private static long serverTick = 0;
+
+    // rituals.json, section "furnace": enabled, radius, fuelSearchCooldownTicks
+    private static RitualConfig.Furnace cfg() { return GameplayConfig.rituals().furnace; }
 
     private FurnaceRitual() {}
 
+    /** Called on every drag sync packet, so everything here must be safe to repeat. */
     public static void onStartDrag(int entityId, ServerLevel level, ServerPlayer player) {
-        // Only register if not already burning; preserve existing burn state on re-drag
-        if (!activeFurnaces.containsKey(entityId)) {
-            FurnaceType type = detectType(getStack(level, entityId));
-            if (type != null) activeFurnaces.put(entityId, new BurningState(level, player, type, 0));
-        }
-        // Play a distinct "picked up" sound for each furnace variant
-        var e = level.getEntity(entityId);
-        if (e instanceof ItemEntity furnace) {
-            FurnaceType type = detectType(furnace.getItem());
-            if (type != null) {
-                net.minecraft.sounds.SoundEvent startSound = switch (type) {
-                    case FURNACE  -> SoundEvents.FURNACE_FIRE_CRACKLE;
-                    case BLASTING -> SoundEvents.BLASTFURNACE_FIRE_CRACKLE;
-                    case SMOKING  -> SoundEvents.SMOKER_SMOKE;
-                };
-                level.playSound(null, furnace.blockPosition(),
-                        startSound, SoundSource.BLOCKS, 0.35f, 0.55f);
-            }
-        }
+        if (!cfg().enabled) return;
+        if (activeFurnaces.containsKey(entityId)) return; // already registered: no second pickup sound
+
+        if (!(level.getEntity(entityId) instanceof ItemEntity furnace)) return;
+        FurnaceType type = detectType(furnace.getItem());
+        if (type == null) return;
+
+        activeFurnaces.put(entityId, new BurningState(level, player, type, 0));
+        setLit(furnace, false); // clear a marker left over from an earlier crash
+        level.playSound(null, furnace.blockPosition(), type.sound, SoundSource.BLOCKS, 0.35f, 0.55f);
     }
 
     public static void onRelease(int entityId) {
-        activeFurnaces.remove(entityId);
+        BurningState state = activeFurnaces.remove(entityId);
         fuelSearchCooldown.remove(entityId);
-        // Cooking progress is intentionally preserved — item remains mid-cook in the world
+        if (state != null) unlight(state, entityId); // a released furnace goes back to normal
+        // Cooking progress is kept: an item stays mid-cook in the world.
     }
 
     public static void tick() {
+        serverTick++;
+        if (serverTick % PRUNE_INTERVAL == 0) {
+            cookingItems.values().removeIf(p -> serverTick - p.lastTouched > PROGRESS_KEEP);
+        }
+
         fuelSearchCooldown.replaceAll((id, t) -> t - 1);
         fuelSearchCooldown.values().removeIf(t -> t <= 0);
 
@@ -112,53 +133,53 @@ public final class FurnaceRitual {
             int furnaceId = entry.getKey();
             BurningState state = entry.getValue();
 
-            // FIX: was only checking whether the furnace item entity was
-            // still alive — if the PLAYER disconnected mid-drag, this entry
-            // (plus fuelSearchCooldown) leaked forever, since dragged items
-            // no longer despawn on their own (setUnlimitedLifetime). An
-            // abandoned furnace would otherwise keep burning/cooking
-            // autonomously with no player around, indefinitely.
+            // The player left mid-drag: stop, so an abandoned furnace does not keep working forever.
             if (state.player.isRemoved()) {
+                unlight(state, furnaceId);
                 it.remove();
                 fuelSearchCooldown.remove(furnaceId);
                 continue;
             }
             ServerLevel level = state.level;
 
-            var ent = level.getEntity(furnaceId);
-            if (!(ent instanceof ItemEntity furnace) || !furnace.isAlive()) {
+            if (!(level.getEntity(furnaceId) instanceof ItemEntity furnace) || !furnace.isAlive()) {
                 it.remove();
                 fuelSearchCooldown.remove(furnaceId);
                 continue;
             }
 
             FurnaceType type = detectType(furnace.getItem());
-            if (type == null) { it.remove(); fuelSearchCooldown.remove(furnaceId); continue; }
+            if (type == null) { unlight(state, furnaceId); it.remove(); fuelSearchCooldown.remove(furnaceId); continue; }
+
+            // ── What can be cooked here? Nothing: do nothing and keep the fuel. ──
+            AABB box = new AABB(furnace.position(), furnace.position()).inflate(cfg().radius);
+            List<Job> jobs = new ArrayList<>();
+            for (ItemEntity candidate : level.getEntitiesOfClass(ItemEntity.class, box,
+                    i -> i != furnace && i.isAlive() && !i.getItem().isEmpty())) {
+                findRecipe(level, type, candidate.getItem())
+                        .ifPresent(holder -> jobs.add(new Job(candidate, holder)));
+            }
+            if (jobs.isEmpty()) { setLit(furnace, false); continue; }
 
             // ── Fuel phase ──────────────────────────────────────────────
             if (state.burnTimeLeft <= 0) {
-                // Not burning — try to consume fuel if cooldown elapsed
-                if (!fuelSearchCooldown.containsKey(furnaceId)) {
-                    boolean consumed = tryConsumeFuel(level, furnace, state);
-                    if (!consumed) {
-                        // Show "cold" puff of smoke to signal waiting for fuel
-                        if (++state.particleTicker % 20 == 0) {
-                            level.sendParticles(ParticleTypes.SMOKE,
-                                    furnace.getX(), furnace.getY() + 0.3, furnace.getZ(),
-                                    3, 0.1, 0.1, 0.1, 0.005);
-                        }
-                        fuelSearchCooldown.put(furnaceId, FUEL_SEARCH_COOLDOWN);
-                        continue; // no fuel, skip cooking this tick
+                if (fuelSearchCooldown.containsKey(furnaceId)) { setLit(furnace, false); continue; } // waiting before the next fuel check
+                if (!tryConsumeFuel(level, furnace, state, box)) {
+                    setLit(furnace, false);
+                    // A cold puff of smoke says "I need fuel"
+                    if (++state.particleTicker % 20 == 0) {
+                        level.sendParticles(ParticleTypes.SMOKE,
+                                furnace.getX(), furnace.getY() + 0.3, furnace.getZ(),
+                                3, 0.1, 0.1, 0.1, 0.005);
                     }
-                } else {
-                    continue; // waiting before next fuel check
+                    fuelSearchCooldown.put(furnaceId, cfg().fuelSearchCooldownTicks);
+                    continue;
                 }
             }
 
-            // ── Burning phase ────────────────────────────────────────────
+            // ── Burning phase ───────────────────────────────────────────
             state.burnTimeLeft--;
-
-            // Emit flame + smoke particles while burning
+            setLit(furnace, true);
             if (++state.particleTicker % PARTICLE_INTERVAL == 0) {
                 level.sendParticles(ParticleTypes.FLAME,
                         furnace.getX(), furnace.getY() + 0.25, furnace.getZ(),
@@ -168,99 +189,89 @@ public final class FurnaceRitual {
                         1, 0.05, 0.05, 0.05, 0.003);
             }
 
-            // ── Cooking phase ────────────────────────────────────────────
-            AABB box = new AABB(furnace.position(), furnace.position()).inflate(RADIUS);
-            List<ItemEntity> nearby = level.getEntitiesOfClass(ItemEntity.class, box,
-                    i -> i != furnace && i.isAlive() && !i.getItem().isEmpty());
-
-            for (ItemEntity ingredient : nearby) {
-                tickCooking(level, furnace, ingredient, type);
-            }
+            // ── Cooking phase ───────────────────────────────────────────
+            for (Job job : jobs) tickCooking(level, furnace, job, type);
         }
     }
 
     // ── Cooking logic ────────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
-    private static void tickCooking(ServerLevel level, ItemEntity furnace,
-                                    ItemEntity ingredient, FurnaceType type) {
+    private static void tickCooking(ServerLevel level, ItemEntity furnace, Job job, FurnaceType type) {
+        ItemEntity ingredient = job.ingredient();
+        AbstractCookingRecipe recipe = job.holder().value();
         ItemStack input = ingredient.getItem();
-        RecipeType<AbstractCookingRecipe> recipeType = (RecipeType<AbstractCookingRecipe>) type.recipeType;
-
-        SingleRecipeInput recipeInput = new SingleRecipeInput(input.copyWithCount(1));
-        Optional<RecipeHolder<AbstractCookingRecipe>> match =
-                level.getRecipeManager().getRecipeFor(recipeType, recipeInput, level);
-        if (match.isEmpty()) return;
-
-        AbstractCookingRecipe recipe = match.get().value();
         int cookTotal = recipe.getCookingTime();
 
-        // Get or create progress tracker for this ingredient entity
         CookingProgress progress = cookingItems.computeIfAbsent(
-                ingredient.getId(), id -> new CookingProgress(cookTotal));
+                ingredient.getId(), id -> new CookingProgress(cookTotal, serverTick));
+        progress.lastTouched = serverTick;
 
-        // If recipe changed (different item), reset
-        if (progress.cookTimeTotal != cookTotal) progress.cookTime = 0;
+        // The item changed into something with another cooking time: start over,
+        // and remember the new total (otherwise this would reset every tick).
+        if (progress.cookTimeTotal != cookTotal) {
+            progress.cookTimeTotal = cookTotal;
+            progress.cookTime = 0;
+        }
 
         progress.cookTime++;
 
-        // Sparkle particle toward the furnace as cooking progresses
         if (progress.cookTime % 8 == 0) {
-            level.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+            level.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
                     ingredient.getX(), ingredient.getY() + 0.15, ingredient.getZ(),
                     2, 0.06, 0.06, 0.06, 0.01);
         }
+        if (progress.cookTime < progress.cookTimeTotal) return;
 
-        if (progress.cookTime >= progress.cookTimeTotal) {
-            // Cooking complete!
-            cookingItems.remove(ingredient.getId());
-            ItemStack result = recipe.assemble(recipeInput, level.registryAccess());
-            if (result.isEmpty()) return;
+        // ── Done ──
+        cookingItems.remove(ingredient.getId());
+        SingleRecipeInput recipeInput = new SingleRecipeInput(input.copyWithCount(1));
+        ItemStack result = recipe.assemble(recipeInput, level.registryAccess());
+        if (result.isEmpty()) return;
 
-            if (input.getCount() <= 1) {
-                ingredient.setItem(result.copy());
-                ingredient.setPickUpDelay(20);
-            } else {
-                RitualUtil.shrinkOrDiscard(ingredient, 1);
-                RitualUtil.spawnResult(level, furnace, result);
-            }
-
-            level.playSound(null, furnace.blockPosition(), type.sound, SoundSource.BLOCKS, 0.8f, 1.2f);
-            // Soft ding to signal the item is done — distinct from the ambient crackle
-            level.playSound(null, furnace.blockPosition(),
-                    SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.55f, 1.5f);
-            level.sendParticles(ParticleTypes.FLAME,
-                    ingredient.getX(), ingredient.getY() + 0.3, ingredient.getZ(),
-                    10, 0.2, 0.15, 0.2, 0.04);
-            level.sendParticles(ParticleTypes.HAPPY_VILLAGER,
-                    ingredient.getX(), ingredient.getY() + 0.5, ingredient.getZ(),
-                    6, 0.2, 0.2, 0.2, 0.0);
-
-            Dragthings.LOGGER.info("Furnace ritual [{}]: {} → {} (furnace #{})",
-                    type.name(), input.getHoverName().getString(),
-                    result.getHoverName().getString(), furnace.getId());
+        if (input.getCount() <= 1) {
+            ingredient.setItem(result.copy());
+            ingredient.setPickUpDelay(20);
+        } else {
+            RitualUtil.shrinkOrDiscard(ingredient, 1);
+            RitualUtil.spawnResult(level, furnace, result);
         }
+
+        level.playSound(null, furnace.blockPosition(), type.sound, SoundSource.BLOCKS, 0.8f, 1.2f);
+        level.playSound(null, furnace.blockPosition(),
+                SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.55f, 1.5f);
+        level.sendParticles(ParticleTypes.FLAME,
+                ingredient.getX(), ingredient.getY() + 0.3, ingredient.getZ(), 10, 0.2, 0.15, 0.2, 0.04);
+        level.sendParticles(ParticleTypes.HAPPY_VILLAGER,
+                ingredient.getX(), ingredient.getY() + 0.5, ingredient.getZ(), 6, 0.2, 0.2, 0.2, 0.0);
+
+        Dragthings.LOGGER.info("Furnace ritual [{}]: {} -> {} (furnace #{})",
+                type.name(), input.getHoverName().getString(),
+                result.getHoverName().getString(), furnace.getId());
     }
 
-    /** Consume one unit of fuel from a nearby fuel item. Returns true if successful. */
-    private static boolean tryConsumeFuel(ServerLevel level, ItemEntity furnace, BurningState state) {
-        AABB box = new AABB(furnace.position(), furnace.position()).inflate(RADIUS);
+    @SuppressWarnings("unchecked")
+    private static Optional<RecipeHolder<AbstractCookingRecipe>> findRecipe(
+            ServerLevel level, FurnaceType type, ItemStack stack) {
+        RecipeType<AbstractCookingRecipe> recipeType = (RecipeType<AbstractCookingRecipe>) type.recipeType;
+        return level.getRecipeManager().getRecipeFor(recipeType, new SingleRecipeInput(stack.copyWithCount(1)), level);
+    }
+
+    /** Burns one nearby fuel item. A lava bucket leaves its empty bucket, like a real furnace. */
+    private static boolean tryConsumeFuel(ServerLevel level, ItemEntity furnace, BurningState state, AABB box) {
         List<ItemEntity> nearby = level.getEntitiesOfClass(ItemEntity.class, box,
                 i -> i != furnace && i.isAlive() && isFuel(i.getItem()));
-
         if (nearby.isEmpty()) return false;
 
         ItemEntity fuelEntity = nearby.get(0);
         ItemStack fuelStack = fuelEntity.getItem();
         int burnTime = getFuelBurnTime(fuelStack);
+        net.minecraft.world.item.Item remainder = fuelStack.getItem().getCraftingRemainingItem(); // e.g. bucket
+        ItemStack leftover = remainder == null ? ItemStack.EMPTY : new ItemStack(remainder);
 
         RitualUtil.shrinkOrDiscard(fuelEntity, 1);
+        if (!leftover.isEmpty()) RitualUtil.spawnResult(level, furnace, leftover);
         state.burnTimeLeft += burnTime;
 
-        // Ignition sound differs per furnace type:
-        //   furnace  → flint-and-steel (classic fire-starting)
-        //   blasting → louder blastfurnace crackle (industrial)
-        //   smoker   → soft smoker hiss (gentle ignition)
         net.minecraft.sounds.SoundEvent igniteSound = switch (state.type) {
             case FURNACE  -> SoundEvents.FLINTANDSTEEL_USE;
             case BLASTING -> SoundEvents.BLASTFURNACE_FIRE_CRACKLE;
@@ -269,15 +280,37 @@ public final class FurnaceRitual {
         level.playSound(null, furnace.blockPosition(),
                 igniteSound, SoundSource.BLOCKS, 0.5f, state.type == FurnaceType.BLASTING ? 0.8f : 1f);
         level.sendParticles(ParticleTypes.LARGE_SMOKE,
-                furnace.getX(), furnace.getY() + 0.3, furnace.getZ(),
-                5, 0.15, 0.1, 0.15, 0.01);
+                furnace.getX(), furnace.getY() + 0.3, furnace.getZ(), 5, 0.15, 0.1, 0.15, 0.01);
 
-        Dragthings.LOGGER.debug("Furnace ritual: consumed {} (burn={}t, furnace #{})",
+        Dragthings.LOGGER.debug("Furnace ritual: burned {} ({} ticks, furnace #{})",
                 fuelStack.getHoverName().getString(), burnTime, furnace.getId());
         return true;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * Switches the dragged furnace between its normal and "lit" look. It only
+     * touches the stack when the state really changes, and always sets a COPY
+     * so the change is synced to clients.
+     */
+    private static void setLit(ItemEntity furnace, boolean lit) {
+        ItemStack stack = furnace.getItem();
+        CustomModelData current = stack.get(DataComponents.CUSTOM_MODEL_DATA);
+        boolean isLit = current != null && current.value() == LIT_MODEL_DATA;
+        if (isLit == lit) return;
+
+        ItemStack copy = stack.copy();
+        if (lit) copy.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(LIT_MODEL_DATA));
+        else copy.remove(DataComponents.CUSTOM_MODEL_DATA);
+        furnace.setItem(copy);
+    }
+
+    private static void unlight(BurningState state, int furnaceId) {
+        if (state.level.getEntity(furnaceId) instanceof ItemEntity furnace && furnace.isAlive()) {
+            setLit(furnace, false);
+        }
+    }
 
     private static FurnaceType detectType(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return null;
@@ -288,18 +321,11 @@ public final class FurnaceRitual {
     }
 
     private static boolean isFuel(ItemStack stack) {
-        return net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
-                .getFuel().containsKey(stack.getItem());
+        return AbstractFurnaceBlockEntity.getFuel().containsKey(stack.getItem());
     }
 
     private static int getFuelBurnTime(ItemStack stack) {
-        Integer t = net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
-                .getFuel().get(stack.getItem());
+        Integer t = AbstractFurnaceBlockEntity.getFuel().get(stack.getItem());
         return t != null ? t : 0;
-    }
-
-    private static ItemStack getStack(ServerLevel level, int entityId) {
-        var e = level.getEntity(entityId);
-        return (e instanceof ItemEntity ie) ? ie.getItem() : ItemStack.EMPTY;
     }
 }

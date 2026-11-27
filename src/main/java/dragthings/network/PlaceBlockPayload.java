@@ -7,6 +7,8 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
+import static dragthings.Dragthings.MOD_ID;
+
 /**
  * C2S packet: sent when the player releases a BlockItem entity while
  * looking at a block face with low velocity (i.e. wants to place, not throw).
@@ -31,7 +33,7 @@ public record PlaceBlockPayload(
 
     public static final CustomPacketPayload.Type<PlaceBlockPayload> TYPE =
             new CustomPacketPayload.Type<>(
-                    ResourceLocation.fromNamespaceAndPath("physicitem", "place_block"));
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "place_block"));
 
     public static final StreamCodec<FriendlyByteBuf, PlaceBlockPayload> CODEC =
             StreamCodec.of(PlaceBlockPayload::write, PlaceBlockPayload::read);

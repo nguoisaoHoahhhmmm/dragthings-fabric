@@ -1,16 +1,8 @@
 package dragthings;
 
-import dragthings.client.ChainRenderer;
-import dragthings.client.DragDistanceHudRenderer;
-import dragthings.client.DragThingsConfig;
-import dragthings.client.EatDrinkHandler;
-import dragthings.client.ItemCameraShakeHandler;
-import dragthings.client.ParticleManager;
-import dragthings.client.ItemDragHandler;
-import dragthings.client.ItemEnchantRitual;
-import dragthings.client.ItemTooltipRenderer;
-import dragthings.client.ItemTrailRenderer;
-import dragthings.client.MobDragTooltipRenderer;
+import dragthings.client.*;
+import dragthings.client.container.*;
+import dragthings.client.gui.tooltip.ItemTooltipRenderer;
 import dragthings.client.arm.*;
 import dragthings.client.particle.ParticleProfileManager;
 import dragthings.mobdrag.*;
@@ -24,7 +16,7 @@ public class DragthingsClient implements ClientModInitializer {
         ParticleProfileManager.init();
         ItemDragHandler.init();
         ItemTooltipRenderer.init();
-        DragDistanceHudRenderer.init();
+//        DragDistanceHudRenderer.init();
         ItemCameraShakeHandler.init();
         ItemEnchantRitual.init();
         ItemTrailRenderer.init();
@@ -32,8 +24,10 @@ public class DragthingsClient implements ClientModInitializer {
         MobDragHandler.init();
         MobDragTooltipRenderer.init();
         EatDrinkHandler.init();
+        ContainerBillboardRenderer.init();
         ParticleManager.registerParticles();
         DragArmRenderer.init();
-        System.out.println("[DragThings] v0.6.0 initialized!");
+        BundleEjectKey.init();
+        System.out.println("[DragThings] Initialized!");
     }
 }

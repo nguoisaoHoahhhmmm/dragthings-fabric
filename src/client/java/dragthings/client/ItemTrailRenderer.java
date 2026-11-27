@@ -193,6 +193,11 @@ public final class ItemTrailRenderer {
 
             float baseAlpha = entry.alpha * headAlpha;
 
+            // Head zone ≈ last 2 points: alpha drops quickly back to 0 there,
+            // so the trail is transparent at the tail, solid in the body,
+            // then transparent again right next to the item.
+            float bodyEnd = 1f - Math.min(2f / (n - 1), 0.4f);
+
             // ── Pre-compute miter right vectors for every point ───────────
             // Each interior point averages the directions of its two adjacent
             // segments. Adjacent quads then share identical edge positions,
@@ -222,9 +227,9 @@ public final class ItemTrailRenderer {
                 float tA = (float) i       / (n - 1);
                 float tB = (float)(i + 1)  / (n - 1);
 
-                // Quadratic alpha: transparent at tail, opaque at head
-                float aA = tA * tA * baseAlpha;
-                float aB = tB * tB * baseAlpha;
+                // Transparent tail -> solid body -> transparent head
+                float aA = trailAlpha(tA, bodyEnd) * baseAlpha;
+                float aB = trailAlpha(tB, bodyEnd) * baseAlpha;
 
                 // Colour warms slightly toward head
                 float rA = CR + (1f - CR) * tA * 0.3f;
@@ -273,5 +278,19 @@ public final class ItemTrailRenderer {
         RenderSystem.depthMask(true);
         RenderSystem.enableCull();
         RenderSystem.disableBlend();
+    }
+
+    /**
+     * Alpha envelope along the trail, 0..1.
+     * t = 0 at the tail, 1 at the head (item). Rises smoothly (quadratic)
+     * from the tail up to 1 at bodyEnd, then falls linearly back to 0 at the head.
+     */
+    private static float trailAlpha(float t, float bodyEnd) {
+        if (t <= bodyEnd) {
+            float u = bodyEnd > 0f ? t / bodyEnd : 1f;
+            return u * u;
+        }
+        float u = (t - bodyEnd) / (1f - bodyEnd);
+        return 1f - u;
     }
 }

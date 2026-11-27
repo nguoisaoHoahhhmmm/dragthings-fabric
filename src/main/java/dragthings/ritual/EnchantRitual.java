@@ -1,76 +1,111 @@
 package dragthings.ritual;
 
 import dragthings.Dragthings;
+import dragthings.config.GameplayConfig;
+import dragthings.config.RitualConfig;
 import dragthings.network.RitualProgressPayload;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.EnchantmentTags;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Enchant ritual: drag an Enchanting Table next to an enchantable item and
+ * some lapis, and the dragging player pays XP LEVELS to enchant the item.
+ *
+ * Flow (all server side):
+ *   1. every tick, check the table has an enchantable item and lapis nearby
+ *      and the player has enough levels (creative players always do)
+ *   2. when all three are met, start a short "channel" and tell clients, who
+ *      play the XP orbs flying from the player into the table
+ *   3. when the channel ends, enchant the item and take the levels and lapis
+ *   4. if anything is lost mid-channel (item moved away, table released),
+ *      cancel it and charge nothing
+ */
 public final class EnchantRitual {
 
+    // ── Phases and flags sent to the client (RitualProgressPayload) ───────
+    public static final int PHASE_HIDE    = -1; // stop showing the HUD
+    public static final int PHASE_IDLE    = 0;  // flags changed
+    public static final int PHASE_CHANNEL = 1;  // ritual started, play the orbs
+    public static final int PHASE_DONE    = 2;  // item was enchanted
+    public static final int PHASE_CANCEL  = 3;  // channel was interrupted
+
+    public static final int FLAG_TARGET = 1;
+    public static final int FLAG_LAPIS  = 2;
+    public static final int FLAG_XP     = 4;
+    public static final int FLAGS_READY = FLAG_TARGET | FLAG_LAPIS | FLAG_XP;
+
+    // ── Tuning: rituals.json, section "enchant" ──────────────────────────
+    private static RitualConfig.Enchant cfg() { return GameplayConfig.rituals().enchant; }
+    private static double radius() { return cfg().radius; }
+    private static int levelCost() { return cfg().levelCost; }
+    private static int enchantPower() { return cfg().enchantPower; }
+    private static int lapisCost() { return cfg().lapisCost; }
+    private static int cooldownTicks() { return cfg().cooldownTicks; }
+    /** Ticks from the orbs leaving the player to the item being enchanted. */
+    public static final int CHANNEL_TICKS = 16;
+
     private static final class State {
-        final ServerLevel level;
-        final ServerPlayer player;
+        ServerLevel level;
+        ServerPlayer player;
+        int channel = -1;      // ticks left, -1 when not channeling
+        int cooldown = 0;
+        int lastFlags = -99;   // last flags sent to the dragger; -99 forces a resend
+
         State(ServerLevel l, ServerPlayer p) { level = l; player = p; }
     }
 
-    private static final Map<Integer, State>   activeTables  = new ConcurrentHashMap<>();
-    private static final Map<Integer, Integer> storedXp      = new ConcurrentHashMap<>();
-    private static final Map<Integer, Integer> storedOrbCount = new ConcurrentHashMap<>();
-
-    private static final double RADIUS        = 1.5;
-    private static final double ABSORB_DIST   = 0.4;
-    private static final double ORB_PULL      = 0.08;
-    private static final int    XP_PER_LEVEL  = 7;
-    private static final int    MAX_LEVEL     = 30;
-    private static final int    LAPIS_COST    = 1;
-    public  static final int    MAX_ORB_BAR   = 15;
+    private static final Map<Integer, State> activeTables = new ConcurrentHashMap<>();
 
     private EnchantRitual() {}
 
-    /** Expose the set of active enchanting table entity IDs (used by the XP-orb pickup mixin). */
+    /** Expose the set of active enchanting table entity IDs. */
     public static java.util.Set<Integer> activeTableIds() { return activeTables.keySet(); }
 
+    /** Called on every drag sync packet, so it must not reset a running ritual. */
     public static void onStartDrag(int entityId, ServerLevel level, ServerPlayer player) {
-        boolean isNew = !activeTables.containsKey(entityId);
+        if (!cfg().enabled) return;
+        State existing = activeTables.get(entityId);
+        if (existing != null) {
+            existing.level = level;
+            existing.player = player;
+            return;
+        }
         activeTables.put(entityId, new State(level, player));
         // Mystical hum only on first pickup, not on every sync packet.
-        if (isNew) {
-            var e = level.getEntity(entityId);
-            if (e instanceof ItemEntity table) {
-                level.playSound(null, table.blockPosition(),
-                        SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS, 0.5f, 0.6f);
-            }
+        if (level.getEntity(entityId) instanceof ItemEntity table) {
+            level.playSound(null, table.blockPosition(),
+                    SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS, 0.5f, 0.6f);
         }
-        sendProgress(player, entityId, storedOrbCount.getOrDefault(entityId, 0));
     }
 
     public static void onRelease(int entityId, ServerPlayer player) {
-        activeTables.remove(entityId);
-        // FIX: onRelease is called from the client packet handler, so the
-        // player should still be valid here in practice — but guard anyway
-        // since sendProgress() otherwise silently no-ops on a bad connection,
-        // and this makes the invariant explicit rather than implicit.
+        State st = activeTables.remove(entityId);
         if (!player.isRemoved()) {
-            sendProgress(player, entityId, -1);
+            if (st != null && st.channel >= 0 && st.level.getEntity(entityId) instanceof ItemEntity table) {
+                broadcast(table, player, PHASE_CANCEL, 0);
+            }
+            send(player, new RitualProgressPayload(entityId, player.getId(), PHASE_HIDE, 0, levelCost()));
         }
     }
 
@@ -80,87 +115,125 @@ public final class EnchantRitual {
         Iterator<Map.Entry<Integer, State>> it = activeTables.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<Integer, State> entry = it.next();
-            int tableId         = entry.getKey();
-            ServerLevel level   = entry.getValue().level;
-            ServerPlayer player = entry.getValue().player;
+            int tableId = entry.getKey();
+            State st = entry.getValue();
+            ServerLevel level = st.level;
+            ServerPlayer player = st.player;
 
-            // FIX: previously only checked whether the table item entity was
-            // still alive — if the PLAYER disconnected mid-ritual (while
-            // dragging an enchanting table), this entry (plus storedXp and
-            // storedOrbCount) leaked forever, since the item entity itself
-            // can remain alive in the world independent of the player's
-            // connection. Same cleanup pattern already used by
-            // ChestLootRitual/EnderChestRitual.
+            // The player disconnected mid-ritual: drop the entry so it does
+            // not leak (the table item itself can outlive their connection).
             if (player.isRemoved()) {
-                it.remove(); storedXp.remove(tableId); storedOrbCount.remove(tableId);
+                it.remove();
                 continue;
             }
 
-            var e = level.getEntity(tableId);
-            if (!(e instanceof ItemEntity table) || !table.isAlive()) {
-                it.remove(); storedXp.remove(tableId); storedOrbCount.remove(tableId);
+            if (!(level.getEntity(tableId) instanceof ItemEntity table) || !table.isAlive()) {
+                it.remove();
+                send(player, new RitualProgressPayload(tableId, player.getId(), PHASE_HIDE, 0, levelCost()));
                 continue;
             }
 
-            AABB box = new AABB(table.position(), table.position()).inflate(RADIUS);
-
-            // Pull + absorb XP orbs
-            boolean absorbed = false;
-            for (ExperienceOrb orb : level.getEntitiesOfClass(ExperienceOrb.class, box)) {
-                Vec3 toTable = table.position().subtract(orb.position());
-                double dist  = toTable.length();
-                if (dist < ABSORB_DIST) {
-                    storedXp.merge(tableId, orb.getValue(), Integer::sum);
-                    storedOrbCount.merge(tableId, 1, Integer::sum);
-                    absorbed = true;
-                    level.sendParticles(ParticleTypes.ENCHANT, orb.getX(), orb.getY() + 0.1, orb.getZ(), 10, 0.15, 0.15, 0.15, 0.04);
-                    level.sendParticles(ParticleTypes.WAX_OFF, table.getX(), table.getY() + 0.15, table.getZ(), 3, 0.1, 0.1, 0.1, 0.01);
-                    level.playSound(null, table.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.4f, 1.4f);
-                    orb.discard();
-                } else if (dist > 0.001) {
-                    Vec3 pull = toTable.normalize().scale(ORB_PULL);
-                    orb.setDeltaMovement(pull.x, pull.y + 0.02, pull.z);
-                }
-            }
-            if (absorbed) sendProgress(player, tableId, Math.min(MAX_ORB_BAR, storedOrbCount.getOrDefault(tableId, 0)));
-
-            // Check enchant readiness
-            ItemEntity lapis = null, target = null;
+            // What is next to the table
+            AABB box = new AABB(table.position(), table.position()).inflate(radius());
+            ItemEntity lapis = null;
+            ItemEntity target = null;
             for (ItemEntity nearby : level.getEntitiesOfClass(ItemEntity.class, box)) {
                 if (nearby == table) continue;
                 ItemStack s = nearby.getItem();
-                if (lapis == null && s.is(Items.LAPIS_LAZULI) && s.getCount() >= LAPIS_COST) lapis = nearby;
-                else if (target == null && !s.is(Items.LAPIS_LAZULI) && s.getItem().getEnchantmentValue() > 0) target = nearby;
+                if (lapis == null && s.is(Items.LAPIS_LAZULI) && s.getCount() >= lapisCost()) lapis = nearby;
+                else if (target == null && canEnchant(s)) target = nearby;
             }
 
-            int bank = storedXp.getOrDefault(tableId, 0);
-            int enchLvl = Math.min(MAX_LEVEL, bank / XP_PER_LEVEL);
+            boolean creative = player.getAbilities().instabuild;
+            boolean hasXp = creative || player.experienceLevel >= levelCost();
+            int flags = (target != null ? FLAG_TARGET : 0)
+                    | (lapis != null ? FLAG_LAPIS : 0)
+                    | (hasXp ? FLAG_XP : 0);
+            boolean ready = flags == FLAGS_READY;
 
-            if (lapis != null && target != null && enchLvl >= 1) {
-                ItemStack lapisStack = lapis.getItem();
-                ItemStack targetStack = target.getItem();
-                ItemStack enchanted = EnchantmentHelper.enchantItem(RandomSource.create(), targetStack.copy(),
-                        enchLvl, level.registryAccess(), Optional.<HolderSet<Enchantment>>empty());
-                target.setItem(enchanted);
-                lapisStack.shrink(LAPIS_COST);
-                if (lapisStack.isEmpty()) lapis.discard(); else lapis.setItem(lapisStack);
-                storedXp.put(tableId, bank - enchLvl * XP_PER_LEVEL);
-                storedOrbCount.put(tableId, 0);
-                sendProgress(player, tableId, 0);
-                level.playSound(null, table.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0f, 1.0f);
-                // Layered magical finish: glyph swirl + ethereal whoosh
-                level.playSound(null, table.blockPosition(), SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS, 0.8f, 1.5f);
-                level.playSound(null, table.blockPosition(), SoundEvents.ALLAY_AMBIENT_WITHOUT_ITEM, SoundSource.PLAYERS, 0.5f, 1.2f);
-                level.sendParticles(ParticleTypes.ENCHANT, table.getX(), table.getY() + 0.3, table.getZ(), 40, 0.4, 0.4, 0.4, 0.08);
-                level.sendParticles(ParticleTypes.HAPPY_VILLAGER, table.getX(), table.getY() + 0.5, table.getZ(), 12, 0.3, 0.3, 0.3, 0.0);
-                level.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, table.getX(), table.getY() + 0.4, table.getZ(), 8, 0.25, 0.25, 0.25, 0.05);
-                Dragthings.LOGGER.info("Enchant ritual: {} at level {} (table #{})", targetStack.getHoverName().getString(), enchLvl, tableId);
+            if (st.cooldown > 0) st.cooldown--;
+
+            if (st.channel >= 0) {
+                if (!ready) {
+                    // Lost something mid-channel: cancel, nothing is charged.
+                    st.channel = -1;
+                    st.lastFlags = -99;
+                    broadcast(table, player, PHASE_CANCEL, flags);
+                } else if (--st.channel <= 0) {
+                    finish(level, player, table, lapis, target, creative);
+                    st.channel = -1;
+                    st.cooldown = cooldownTicks();
+                    st.lastFlags = -99;
+                }
+            } else if (ready && st.cooldown <= 0) {
+                st.channel = CHANNEL_TICKS;
+                broadcast(table, player, PHASE_CHANNEL, flags);
+                level.playSound(null, table.blockPosition(),
+                        SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS, 0.7f, 1.0f);
+            }
+
+            // Keep the dragger's HUD in step with what is next to the table.
+            if (st.channel < 0 && flags != st.lastFlags) {
+                st.lastFlags = flags;
+                send(player, new RitualProgressPayload(tableId, player.getId(), PHASE_IDLE, flags, levelCost()));
             }
         }
     }
 
-    private static void sendProgress(ServerPlayer player, int tableId, int orbCount) {
-        if (ServerPlayNetworking.canSend(player, RitualProgressPayload.TYPE))
-            ServerPlayNetworking.send(player, new RitualProgressPayload(tableId, orbCount));
+    /**
+     * Only something that has NOT been enchanted yet can be a target. Without
+     * this, a stack of lapis would re-enchant the same item over and over.
+     */
+    private static boolean canEnchant(ItemStack s) {
+        return !s.is(Items.LAPIS_LAZULI)
+                && !s.is(Items.ENCHANTED_BOOK)
+                && !s.has(DataComponents.STORED_ENCHANTMENTS)
+                && s.isEnchantable();
+    }
+
+    private static void finish(ServerLevel level, ServerPlayer player, ItemEntity table,
+                               ItemEntity lapis, ItemEntity target, boolean creative) {
+        ItemStack lapisStack = lapis.getItem();
+        ItemStack targetStack = target.getItem();
+
+        // Only what an enchanting table can give: no curses, no Mending or
+        // other treasure enchantments (an empty Optional would allow ALL of them).
+        Optional<HolderSet<Enchantment>> pool = level.registryAccess()
+                .registryOrThrow(Registries.ENCHANTMENT)
+                .getTag(EnchantmentTags.IN_ENCHANTING_TABLE)
+                .map(named -> (HolderSet<Enchantment>) named);
+        ItemStack enchanted = EnchantmentHelper.enchantItem(RandomSource.create(), targetStack.copy(),
+                enchantPower(), level.registryAccess(), pool);
+        target.setItem(enchanted);
+
+        lapisStack.shrink(lapisCost());
+        if (lapisStack.isEmpty()) lapis.discard(); else lapis.setItem(lapisStack);
+
+        if (!creative) player.giveExperienceLevels(-levelCost());
+
+        level.playSound(null, table.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0f, 1.0f);
+        // Layered magical finish: glyph swirl + ethereal whoosh
+        level.playSound(null, table.blockPosition(), SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS, 0.8f, 1.5f);
+        level.playSound(null, table.blockPosition(), SoundEvents.ALLAY_AMBIENT_WITHOUT_ITEM, SoundSource.PLAYERS, 0.5f, 1.2f);
+
+        broadcast(table, player, PHASE_DONE, 0);
+        Dragthings.LOGGER.info("Enchant ritual: {} at power {} for {} levels (table #{})",
+                targetStack.getHoverName().getString(), enchantPower(), creative ? 0 : levelCost(), table.getId());
+    }
+
+    /** To the dragger, and to everyone tracking the table, so they can all see the orbs. */
+    private static void broadcast(ItemEntity table, ServerPlayer owner, int phase, int flags) {
+        RitualProgressPayload payload =
+                new RitualProgressPayload(table.getId(), owner.getId(), phase, flags, levelCost());
+        send(owner, payload);
+        for (ServerPlayer other : PlayerLookup.tracking(table)) {
+            if (other != owner) send(other, payload);
+        }
+    }
+
+    private static void send(ServerPlayer player, RitualProgressPayload payload) {
+        if (ServerPlayNetworking.canSend(player, RitualProgressPayload.TYPE)) {
+            ServerPlayNetworking.send(player, payload);
+        }
     }
 }

@@ -4,7 +4,6 @@
 	"package": "dragthings.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"ExperienceOrbPickupMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

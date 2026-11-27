@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/smoker",
+  "overrides": [
+    { "predicate": { "custom_model_data": 7301 }, "model": "dragthings:item/smoker_lit" }
+  ]
+}

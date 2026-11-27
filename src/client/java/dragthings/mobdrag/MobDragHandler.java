@@ -1,5 +1,7 @@
 package dragthings.mobdrag;
 
+import dragthings.client.arm.DragArmRenderer;
+import dragthings.config.GameplayConfig;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -77,7 +79,6 @@ public class MobDragHandler {
     private static double displayedHoldDistance = 3.0;
     private static final double MIN_HOLD_DIST        = 1.5;
     private static final double SCROLL_STEP          = 0.5;
-    private static final double DISTANCE_EASE_SPEED  = 0.18;
 
     private MobDragHandler() {}
 
@@ -98,7 +99,7 @@ public class MobDragHandler {
     /** Read by DragDistanceHudRenderer while a mob (not item) is being dragged. */
     public static double getDynamicHoldDistance() { return displayedHoldDistance; }
     public static double getMinHoldDistance()     { return MIN_HOLD_DIST; }
-    public static double getMaxHoldDistance()     { return DragThingsConfig.get().mobDrag.getPickupRange(); }
+    public static double getMaxHoldDistance()     { return GameplayConfig.mobDrag().getPickupRange(); }
 
     /**
      * Called from ScrollInputMixin while a mob is being dragged, mirroring
@@ -124,9 +125,10 @@ public class MobDragHandler {
         // grow-back animation can finish.
         tickTween(mobCfg);
 
-        if (!mobCfg.enableMobDrag) {
+        if (!GameplayConfig.mobDrag().enableMobDrag) {
             hoveredMob = null;
             if (draggedMob != null) release(client, Vec3.ZERO);
+            wasMousePressed = client.mouseHandler.isRightPressed();
             return;
         }
 
@@ -135,7 +137,7 @@ public class MobDragHandler {
 
         LivingEntity newHovered = (itemDragActive || draggedMob != null)
                 ? null
-                : findLookedAtMob(client, mobCfg);
+                : findLookedAtMob(client);
         hoveredMob = newHovered;
 
         boolean mousePressed = client.mouseHandler.isRightPressed();
@@ -153,12 +155,13 @@ public class MobDragHandler {
 
             smoothPosition = draggedMob.position();
             double initialDist = client.player.getEyePosition().distanceTo(draggedMob.position());
-            dynamicHoldDistance   = Math.max(MIN_HOLD_DIST, Math.min(mobCfg.getPickupRange(), initialDist));
+            dynamicHoldDistance   = Math.max(MIN_HOLD_DIST, Math.min(GameplayConfig.mobDrag().getPickupRange(), initialDist));
             displayedHoldDistance = dynamicHoldDistance;
             ticksSinceLastSync = 0;
 
             ItemTrailRenderer.tickTrail(draggedMob, Collections.emptyList());
             ChainRenderer.update(draggedMob, Collections.emptyList());
+            DragArmRenderer.onLocalGrab(draggedMob);
 
             if (cfg.enableSound) {
                 client.level.playLocalSound(
@@ -175,7 +178,7 @@ public class MobDragHandler {
             ClientPlayNetworking.send(new MobDragPayload(
                     draggedMob.getId(),
                     draggedMob.getX(), draggedMob.getY(), draggedMob.getZ(),
-                    true, mobCfg.invulnerableWhileDragged));
+                    true, GameplayConfig.mobDrag().invulnerableWhileDragged));
         }
 
         // ── While dragging ──────────────────────────────────────────────
@@ -192,7 +195,7 @@ public class MobDragHandler {
                 }
                 release(client, releaseVel);
             } else {
-                displayedHoldDistance += (dynamicHoldDistance - displayedHoldDistance) * DISTANCE_EASE_SPEED;
+                displayedHoldDistance += (dynamicHoldDistance - displayedHoldDistance) * GameplayConfig.physics().getDistanceEaseSpeed();
 
                 Vec3 eyePos  = client.player.getEyePosition();
                 Vec3 lookVec = client.player.getLookAngle();
@@ -215,7 +218,7 @@ public class MobDragHandler {
                     ClientPlayNetworking.send(new MobDragPayload(
                             draggedMob.getId(),
                             resolved.x, resolved.y, resolved.z,
-                            true, mobCfg.invulnerableWhileDragged));
+                            true, GameplayConfig.mobDrag().invulnerableWhileDragged));
                 }
             }
         }
@@ -267,7 +270,7 @@ public class MobDragHandler {
         draggedMob   = null;
         shrinkTarget = 0f; // animatingMob keeps tracking until the grow-back tween finishes
         ticksSinceLastSync = 0;
-
+        DragArmRenderer.onLocalRelease();
         ItemTrailRenderer.stopTrail();
         ChainRenderer.stop();
     }
@@ -302,10 +305,10 @@ public class MobDragHandler {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private static LivingEntity findLookedAtMob(Minecraft client, DragThingsConfig.MobConfig mobCfg) {
+    private static LivingEntity findLookedAtMob(Minecraft client) {
         Vec3 eyePos  = client.player.getEyePosition();
         Vec3 lookVec = client.player.getLookAngle();
-        double range = mobCfg.getPickupRange();
+        double range = GameplayConfig.mobDrag().getPickupRange();
         Vec3 endPos  = eyePos.add(lookVec.scale(range));
 
         AABB searchBox = new AABB(eyePos, endPos).inflate(1.5);
@@ -318,7 +321,7 @@ public class MobDragHandler {
             if (candidate == client.player) continue;
             if (candidate instanceof Player) continue; // never grab players
             if (!candidate.isAlive()) continue;
-            if (!isAllowed(candidate, mobCfg)) continue;
+            if (!isAllowed(candidate)) continue;
 
             Vec3 toCandidate = candidate.position().subtract(eyePos);
             double dist = toCandidate.length();
@@ -334,19 +337,19 @@ public class MobDragHandler {
     }
 
     /** Category + allowlist/blacklist check — this is a client-side preference filter, not a security boundary. */
-    private static boolean isAllowed(LivingEntity entity, DragThingsConfig.MobConfig mobCfg) {
+    private static boolean isAllowed(LivingEntity entity) {
         String id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
 
-        if (mobCfg.isBlacklisted(id)) return false;
-        if (mobCfg.isAllowlisted(id)) return true;
+        if (GameplayConfig.mobDrag().isBlacklisted(id)) return false;
+        if (GameplayConfig.mobDrag().isAllowlisted(id)) return true;
 
         boolean isBoss     = entity instanceof EnderDragon || entity instanceof WitherBoss;
         boolean isHostile  = entity instanceof Enemy;
         boolean isNeutral  = entity instanceof NeutralMob;
 
-        if (isBoss)    return mobCfg.allowBoss;
-        if (isHostile) return mobCfg.allowHostile;
-        if (isNeutral) return mobCfg.allowNeutral;
-        return mobCfg.allowPassive;
+        if (isBoss)    return GameplayConfig.mobDrag().allowBoss;
+        if (isHostile) return GameplayConfig.mobDrag().allowHostile;
+        if (isNeutral) return GameplayConfig.mobDrag().allowNeutral;
+        return GameplayConfig.mobDrag().allowPassive;
     }
 }

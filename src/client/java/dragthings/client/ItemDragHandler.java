@@ -1,13 +1,12 @@
 package dragthings.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import dragthings.client.ChainRenderer;
+import dragthings.Dragthings;
 import dragthings.client.arm.DragArmRenderer;
 import dragthings.client.particle.ParticleEngine;
-import dragthings.Dragthings;
+import dragthings.config.GameplayConfig;
 import dragthings.network.DragItemPayload;
 import dragthings.network.PlaceBlockPayload;
-import dragthings.network.SetCraftingTargetPayload;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -23,9 +22,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.BlockPlaceContext;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -142,24 +140,6 @@ public class ItemDragHandler {
             hoveredItem = findLookedAtItem(client, cfg);
             boolean isMousePressed = Minecraft.getInstance().mouseHandler.isRightPressed();
 
-            // ── SET CRAFTING TARGET (open GUI) ──────────────────────────────
-            if (setCraftingTargetKey.consumeClick()) {
-                // Prefer whatever crafting-table ITEM ENTITY is currently
-                // relevant (being dragged, or just hovered) — this covers
-                // the "drag the table around" ritual mode.
-                ItemEntity candidateEntity = isDragging() ? draggedItem : hoveredItem;
-                if (candidateEntity != null && candidateEntity.getItem().is(Items.CRAFTING_TABLE)) {
-                    client.setScreen(new SetCraftingTargetScreen(false, candidateEntity.getId(), BlockPos.ZERO));
-                } else if (client.hitResult instanceof BlockHitResult blockHit
-                        && client.level.getBlockState(blockHit.getBlockPos()).is(Blocks.CRAFTING_TABLE)) {
-                    // Otherwise fall back to whatever PLACED crafting table
-                    // block the crosshair is currently resting on.
-                    client.setScreen(new SetCraftingTargetScreen(true, -1, blockHit.getBlockPos()));
-                }
-                // Neither found: quietly do nothing — pressing the key while
-                // not looking at any crafting table has no target to set.
-            }
-
             if (isDragging() && isMousePressed) {
                 client.options.keyUse.setDown(false);
             }
@@ -212,7 +192,7 @@ public class ItemDragHandler {
 
             // ── ADD TO DRAG (manual, one at a time) ────────────────────────────
             if (isDragging() && addToDragKey.consumeClick()) {
-                int maxFollowers = cfg.maxDragCount - 1;
+                int maxFollowers = GameplayConfig.physics().maxDragCount - 1;
                 if (hoveredItem != null
                         && hoveredItem != draggedItem
                         && !followers.contains(hoveredItem)
@@ -285,13 +265,13 @@ public class ItemDragHandler {
                 // target, so zooming the drag range in/out feels like a smooth
                 // camera-lens adjustment instead of an instant jump.
                 if (displayedDragDistance < 0) displayedDragDistance = dynamicDragDistance;
-                displayedDragDistance += (dynamicDragDistance - displayedDragDistance) * cfg.feel.getDistanceEaseSpeed();
+                displayedDragDistance += (dynamicDragDistance - displayedDragDistance) * GameplayConfig.physics().getDistanceEaseSpeed();
 
                 Vec3 targetPos = getTargetPosition(client, cfg);
                 Vec3 toTarget  = targetPos.subtract(smoothPosition);
                 double distance = toTarget.length();
 
-                float weight = cfg.getWeightMultiplier(draggedItem.getItem());
+                float weight = GameplayConfig.getWeightMultiplier(draggedItem.getItem());
                 double invWeight = 1.0 / weight;
 
                 // Smoothstep ramp: spring goes from 0 -> 1 strength over the
@@ -301,11 +281,11 @@ public class ItemDragHandler {
                 // dragTime/0 -> Infinity -> startupT clamps to 1 (full
                 // strength immediately, no ramp) — no divide-by-zero crash,
                 // floating point division by zero is well-defined.
-                float easeSeconds = cfg.feel.getStartupEaseSeconds();
+                float easeSeconds = GameplayConfig.physics().getStartupEaseSeconds();
                 float startupT = easeSeconds <= 0f ? 1f : Math.min(1f, dragTime / easeSeconds);
                 float startupEase = startupT * startupT * (3f - 2f * startupT);
 
-                double k = startupEase * cfg.getDragForce() * invWeight * (0.4 + 0.6 * Math.tanh(distance * 1.2));
+                double k = startupEase * GameplayConfig.physics().getDragForce() * invWeight * (0.4 + 0.6 * Math.tanh(distance * 1.2));
                 double c = 2.0 * Math.sqrt(k);
 
                 Vec3 springForce  = distance > 0.001 ? toTarget.scale(k) : Vec3.ZERO;
@@ -313,7 +293,7 @@ public class ItemDragHandler {
                 currentVelocity   = currentVelocity.add(springForce.add(dampingForce).scale(0.05));
 
                 double speed = currentVelocity.length();
-                double velCap = cfg.getMaxVelocity() * invWeight;
+                double velCap = GameplayConfig.physics().getMaxVelocity() * invWeight;
                 if (speed > velCap) {
                     currentVelocity = currentVelocity.normalize().scale(velCap);
                 }
@@ -400,7 +380,7 @@ public class ItemDragHandler {
                     Vec3 fPos = followerPos.get(fi);
                     Vec3 fVel = followerVel.get(fi);
 
-                    float fWeight = cfg.getWeightMultiplier(follower.getItem());
+                    float fWeight = GameplayConfig.getWeightMultiplier(follower.getItem());
                     double fInvWeight = 1.0 / fWeight;
 
                     Vec3 fToLeader = prevChainPos.subtract(fPos);
@@ -411,13 +391,13 @@ public class ItemDragHandler {
 
                     Vec3 fToTarget = fTarget.subtract(fPos);
                     double fDist   = fToTarget.length();
-                    double fk      = cfg.getDragForce() * fInvWeight * 0.6 * (0.4 + 0.6 * Math.tanh(fDist * 1.2));
+                    double fk      = GameplayConfig.physics().getDragForce() * fInvWeight * 0.6 * (0.4 + 0.6 * Math.tanh(fDist * 1.2));
                     double fc      = 2.0 * Math.sqrt(fk);
                     Vec3 fSpring   = fDist > 0.001 ? fToTarget.scale(fk) : Vec3.ZERO;
                     Vec3 fDamping  = fVel.scale(-fc);
                     fVel = fVel.add(fSpring.add(fDamping).scale(0.05));
                     double fSpeed  = fVel.length();
-                    double fVelCap = cfg.getMaxVelocity() * fInvWeight * 0.8;
+                    double fVelCap = GameplayConfig.physics().getMaxVelocity() * fInvWeight * 0.8;
                     if (fSpeed > fVelCap)
                         fVel = fVel.normalize().scale(fVelCap);
 
@@ -450,7 +430,7 @@ public class ItemDragHandler {
 
                     Vec3 newFPos;
                     if (catchupTicks > 0) {
-                        newFPos = fPos.add(fTo.subtract(fPos).scale(cfg.feel.getFollowerCatchupSpeed()));
+                        newFPos = fPos.add(fTo.subtract(fPos).scale(GameplayConfig.physics().getFollowerCatchupSpeed()));
                         catchupTicks--;
                     } else {
                         newFPos = resolveBlockCollision(client, followerPos.get(fi), fTo);
@@ -512,7 +492,7 @@ public class ItemDragHandler {
         Vec3 avgVelocity = computeWeightedVelocity();
         double avgSpeed  = avgVelocity.length();
 
-        if (cfg.enableBlockPlacement
+        if (GameplayConfig.physics().enableBlockPlacement
                 && avgSpeed < 0.04
                 && draggedItem.getItem().getItem() instanceof BlockItem
                 && tryPlaceBlock(client, draggedItem, cfg)) {
@@ -526,7 +506,7 @@ public class ItemDragHandler {
 
         Vec3 throwVelocity;
         if (avgSpeed > 0.003) {
-            throwVelocity = avgVelocity.scale(cfg.getThrowMultiplier());
+            throwVelocity = avgVelocity.scale(GameplayConfig.physics().getThrowMultiplier());
             double throwSpeed = throwVelocity.length();
             double cappedSpeed = throwSpeed <= 0.6
                     ? throwSpeed
@@ -541,7 +521,7 @@ public class ItemDragHandler {
         draggedItem.setDeltaMovement(throwVelocity);
         draggedItem.noPhysics = false;
 
-        if (cfg.gravityOnRelease || throwVelocity.length() > 0.01) {
+        if (GameplayConfig.physics().gravityOnRelease || throwVelocity.length() > 0.01) {
             draggedItem.setNoGravity(true);
             pendingReleaseItem     = draggedItem;
             pendingReleaseVelocity = throwVelocity;
@@ -559,14 +539,14 @@ public class ItemDragHandler {
             if (avgSpeed > 0.08) {
                 client.level.playLocalSound(
                         currentPos.x, currentPos.y, currentPos.z,
-                        SoundEvents.SNOWBALL_THROW,
+                        SoundEvents.BUNDLE_DROP_CONTENTS,
                         SoundSource.PLAYERS, 0.25f,
                         0.9f + (float)(avgSpeed * 2.0), false
                 );
             } else {
                 client.level.playLocalSound(
                         currentPos.x, currentPos.y, currentPos.z,
-                        SoundEvents.BUNDLE_DROP_CONTENTS,
+                        SoundEvents.BUNDLE_INSERT,
                         SoundSource.PLAYERS, 0.22f, 1.1f, false
                 );
             }
@@ -589,7 +569,7 @@ public class ItemDragHandler {
                 ItemEntity follower = followers.get(fi);
                 Vec3 fp = followerPos.get(fi);
 
-                float fWeight = cfg.getWeightMultiplier(follower.getItem());
+                float fWeight = GameplayConfig.getWeightMultiplier(follower.getItem());
                 double fInvWeight = 1.0 / fWeight;
                 Vec3 followerThrowVel = throwVelocity.scale(0.7 * fInvWeight);
 
@@ -628,33 +608,33 @@ public class ItemDragHandler {
                                          DragThingsConfig cfg) {
         if (client.level == null || client.player == null) return false;
 
+        // Gate everything up front: nothing may change on the client unless the
+        // server will accept the placement too.
+        if (!GameplayConfig.physics().enableBlockPlacement) return false;
+        if (GameplayConfig.physics().placeRequiresShift && !client.player.isShiftKeyDown()) return false;
+        if (!ClientPlayNetworking.canSend(PlaceBlockPayload.TYPE)) return false;
+
         ItemStack stack = item.getItem();
         if (!(stack.getItem() instanceof BlockItem blockItem)) return false;
 
         Vec3 eyePos  = client.player.getEyePosition();
         Vec3 lookVec = client.player.getLookAngle();
-        double range = displayedDragDistance > 0 ? displayedDragDistance : cfg.getDragDistance();
+        double range = displayedDragDistance > 0 ? displayedDragDistance : GameplayConfig.physics().getDragDistance();
         Vec3 endPos  = eyePos.add(lookVec.scale(range + 1.0));
 
-        net.minecraft.world.phys.BlockHitResult hit = client.level.clip(
-                new net.minecraft.world.level.ClipContext(
-                        eyePos, endPos,
-                        net.minecraft.world.level.ClipContext.Block.OUTLINE,
-                        net.minecraft.world.level.ClipContext.Fluid.NONE,
-                        client.player));
-
-        if (hit.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) return false;
+        BlockHitResult hit = client.level.clip(new ClipContext(
+                eyePos, endPos, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, client.player));
+        if (hit.getType() != HitResult.Type.BLOCK) return false;
 
         BlockPos targetPos = hit.getBlockPos().relative(hit.getDirection());
         Direction face     = hit.getDirection();
         Vec3 hitLoc        = hit.getLocation();
 
-        float hitX = (float)(hitLoc.x - Math.floor(hitLoc.x));
-        float hitY = (float)(hitLoc.y - Math.floor(hitLoc.y));
-        float hitZ = (float)(hitLoc.z - Math.floor(hitLoc.z));
+        float hitX = (float) (hitLoc.x - Math.floor(hitLoc.x));
+        float hitY = (float) (hitLoc.y - Math.floor(hitLoc.y));
+        float hitZ = (float) (hitLoc.z - Math.floor(hitLoc.z));
 
         BlockHitResult fakeHit = new BlockHitResult(hitLoc, face, targetPos, false);
-
         BlockPlaceContext ctx = new BlockPlaceContext(
                 client.level, client.player, InteractionHand.MAIN_HAND,
                 stack.copyWithCount(1), fakeHit);
@@ -663,6 +643,10 @@ public class ItemDragHandler {
         if (!placed.canSurvive(client.level, targetPos)) return false;
         if (!client.level.getBlockState(targetPos).canBeReplaced(ctx)) return false;
 
+        // Send first, then predict locally.
+        ClientPlayNetworking.send(
+                new PlaceBlockPayload(item.getId(), targetPos, face, hitX, hitY, hitZ));
+
         client.level.setBlock(targetPos, placed, 11);
         SoundType snd = placed.getSoundType();
         client.level.playLocalSound(
@@ -670,12 +654,10 @@ public class ItemDragHandler {
                 snd.getPlaceSound(), SoundSource.BLOCKS,
                 (snd.getVolume() + 1f) / 2f, snd.getPitch() * 0.8f, false);
 
-        item.discard();
-
-        if (ClientPlayNetworking.canSend(PlaceBlockPayload.TYPE)) {
-            ClientPlayNetworking.send(
-                    new PlaceBlockPayload(item.getId(), targetPos, face, hitX, hitY, hitZ));
-        }
+        // Only a single item disappears on the client. For a stack the server
+        // keeps the entity and shrinks it by 1; discarding it here would make the
+        // rest of the stack vanish for this player until it is re-tracked.
+        if (stack.getCount() <= 1) item.discard();
 
         Dragthings.LOGGER.debug("Block placed: {} @ {}", placed.getBlock(), targetPos);
         return true;
@@ -684,7 +666,7 @@ public class ItemDragHandler {
     public static boolean handleScroll(double scrollDelta) {
         if (!isDragging()) return false;
         DragThingsConfig cfg = DragThingsConfig.get();
-        if (dynamicDragDistance < 0) dynamicDragDistance = cfg.getDragDistance();
+        if (dynamicDragDistance < 0) dynamicDragDistance = GameplayConfig.physics().getDragDistance();
         dynamicDragDistance += scrollDelta * SCROLL_STEP;
         dynamicDragDistance = Math.max(MIN_DRAG_DIST, Math.min(MAX_DRAG_DIST, dynamicDragDistance));
         return true;
@@ -766,7 +748,7 @@ public class ItemDragHandler {
     private static Vec3 getTargetPosition(Minecraft client, DragThingsConfig cfg) {
         Vec3 eyePos  = client.player.getEyePosition();
         Vec3 lookVec = client.player.getLookAngle();
-        double dist  = displayedDragDistance > 0 ? displayedDragDistance : cfg.getDragDistance();
+        double dist  = displayedDragDistance > 0 ? displayedDragDistance : GameplayConfig.physics().getDragDistance();
         Vec3 rawTarget = eyePos.add(lookVec.scale(dist));
 
         net.minecraft.world.phys.BlockHitResult groundCheck = client.level.clip(
@@ -787,7 +769,7 @@ public class ItemDragHandler {
     private static ItemEntity findLookedAtItem(Minecraft client, DragThingsConfig cfg) {
         Vec3 eyePos  = client.player.getEyePosition();
         Vec3 lookVec = client.player.getLookAngle();
-        Vec3 endPos  = eyePos.add(lookVec.scale(cfg.getPickupRange()));
+        Vec3 endPos  = eyePos.add(lookVec.scale(GameplayConfig.physics().getPickupRange()));
 
         AABB searchBox = new AABB(eyePos, endPos).inflate(1.0);
         List<ItemEntity> items = client.level.getEntitiesOfClass(ItemEntity.class, searchBox);
@@ -800,7 +782,7 @@ public class ItemDragHandler {
             double dot  = lookVec.dot(toItem);
             if (dot > 0.95) {
                 double dist = eyePos.distanceTo(item.position());
-                if (dist < minDistance && dist < cfg.getPickupRange()) {
+                if (dist < minDistance && dist < GameplayConfig.physics().getPickupRange()) {
                     minDistance = dist;
                     closest = item;
                 }

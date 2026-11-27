@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/blast_furnace",
+  "overrides": [
+    { "predicate": { "custom_model_data": 7301 }, "model": "dragthings:item/blast_furnace_lit" }
+  ]
+}

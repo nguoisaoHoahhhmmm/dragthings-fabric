@@ -1,12 +1,15 @@
 package dragthings.ritual;
 
 import dragthings.Dragthings;
+import dragthings.config.GameplayConfig;
+import dragthings.config.RitualConfig;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
@@ -36,14 +39,18 @@ public final class EnderChestRitual {
     private static final Map<Integer, ServerPlayer> activeChests = new ConcurrentHashMap<>();
     private static final Map<Integer, Integer>      cooldown     = new ConcurrentHashMap<>();
 
-    private static final double RADIUS         = 1;
-    private static final int    COOLDOWN_TICKS = 5;
+    private static final Map<Integer, Integer>      fullMsgCooldown = new ConcurrentHashMap<>();
+    private static final int FULL_MSG_COOLDOWN = 40;
+
+    // rituals.json, section "enderChest": enabled, radius, cooldownTicks
+    private static RitualConfig.EnderChest cfg() { return GameplayConfig.rituals().enderChest; }
 
     private EnderChestRitual() {}
 
     // ── Public API ────────────────────────────────────────────────────────
 
     public static void onStartDrag(int entityId, ServerLevel level, ServerPlayer player) {
+        if (!cfg().enabled) return;
         boolean isNew = !activeChests.containsKey(entityId);
         activeChests.put(entityId, player);
         if (isNew) {
@@ -58,6 +65,7 @@ public final class EnderChestRitual {
     public static void onRelease(int entityId) {
         var player = activeChests.remove(entityId);
         cooldown.remove(entityId);
+        fullMsgCooldown.remove(entityId);
         if (player == null || player.isRemoved()) return;
         if (player.level() instanceof ServerLevel level) {
             var e = level.getEntity(entityId);
@@ -71,6 +79,8 @@ public final class EnderChestRitual {
     public static void tick() {
         cooldown.replaceAll((id, ticks) -> ticks - 1);
         cooldown.values().removeIf(ticks -> ticks <= 0);
+        fullMsgCooldown.replaceAll((id, ticks) -> ticks - 1);
+        fullMsgCooldown.values().removeIf(ticks -> ticks <= 0);
 
         if (activeChests.isEmpty()) return;
 
@@ -84,6 +94,7 @@ public final class EnderChestRitual {
             if (player.isRemoved() || !(player.level() instanceof ServerLevel level)) {
                 it.remove();
                 cooldown.remove(chestId);
+                fullMsgCooldown.remove(chestId);
                 continue;
             }
 
@@ -91,11 +102,12 @@ public final class EnderChestRitual {
             if (!(e instanceof ItemEntity chest) || !chest.isAlive()) {
                 it.remove();
                 cooldown.remove(chestId);
+                fullMsgCooldown.remove(chestId);
                 continue;
             }
 
             if (!cooldown.containsKey(chestId) && tryLoot(level, chest, player)) {
-                cooldown.put(chestId, COOLDOWN_TICKS);
+                cooldown.put(chestId, cfg().cooldownTicks);
             }
         }
     }
@@ -103,9 +115,9 @@ public final class EnderChestRitual {
     // ── Core logic ────────────────────────────────────────────────────────
 
     private static boolean tryLoot(ServerLevel level, ItemEntity chestEntity, ServerPlayer player) {
-        Container enderChest = player.getEnderChestInventory();
+        var enderChest = player.getEnderChestInventory();
 
-        AABB box = new AABB(chestEntity.position(), chestEntity.position()).inflate(RADIUS);
+        AABB box = new AABB(chestEntity.position(), chestEntity.position()).inflate(cfg().radius);
         List<ItemEntity> nearby = level.getEntitiesOfClass(ItemEntity.class, box,
                 i -> i != chestEntity
                         && i.isAlive()
@@ -116,10 +128,11 @@ public final class EnderChestRitual {
         if (nearby.isEmpty()) return false;
 
         boolean lootedAny = false;
+        boolean anyRejected = false;
 
         for (ItemEntity itemEntity : nearby) {
             ItemStack toInsert = itemEntity.getItem().copy();
-            ItemStack remainder = insertIntoContainer(enderChest, toInsert);
+            ItemStack remainder = enderChest.addItem(toInsert.copy()); // merges into stacks, then empty slots
 
             if (remainder.getCount() < toInsert.getCount()) {
                 int consumed = toInsert.getCount() - remainder.getCount();
@@ -129,7 +142,15 @@ public final class EnderChestRitual {
                 level.sendParticles(ParticleTypes.PORTAL,
                         itemEntity.getX(), itemEntity.getY() + 0.1, itemEntity.getZ(),
                         3, 0.1, 0.1, 0.1, 0.05);
+            } else {
+                anyRejected = true;
             }
+        }
+
+        // Same hint as the chest ritual: otherwise a full ender chest just silently stops working.
+        if (anyRejected && !lootedAny && fullMsgCooldown.getOrDefault(chestEntity.getId(), 0) <= 0) {
+            player.displayClientMessage(Component.literal("Ender chest is full!").withStyle(ChatFormatting.RED), true);
+            fullMsgCooldown.put(chestEntity.getId(), FULL_MSG_COOLDOWN);
         }
 
         if (lootedAny) {
@@ -144,42 +165,5 @@ public final class EnderChestRitual {
         }
 
         return lootedAny;
-    }
-
-    /**
-     * Same merge/fill logic as ChestLootRitual#insertIntoSlots, but operating
-     * directly against a live {@link Container} (get/setItem) instead of a
-     * NonNullList<ItemStack> snapshot — PlayerEnderChestContainer has no
-     * component to serialize into, changes must go through its own API.
-     */
-    private static ItemStack insertIntoContainer(Container container, ItemStack stack) {
-        stack = stack.copy();
-        int size = container.getContainerSize();
-
-        // Pass 1: merge with existing stacks of the same item
-        for (int i = 0; i < size && !stack.isEmpty(); i++) {
-            ItemStack slot = container.getItem(i);
-            if (slot.isEmpty()) continue;
-            if (!ItemStack.isSameItemSameComponents(slot, stack)) continue;
-
-            int maxStack = Math.min(slot.getMaxStackSize(), container.getMaxStackSize());
-            int canAdd   = Math.min(stack.getCount(), maxStack - slot.getCount());
-            if (canAdd <= 0) continue;
-
-            slot.grow(canAdd);
-            stack.shrink(canAdd);
-            container.setItem(i, slot);
-        }
-
-        // Pass 2: fill empty slots
-        for (int i = 0; i < size && !stack.isEmpty(); i++) {
-            if (!container.getItem(i).isEmpty()) continue;
-            int maxStack = Math.min(stack.getMaxStackSize(), container.getMaxStackSize());
-            int toPlace  = Math.min(stack.getCount(), maxStack);
-            container.setItem(i, stack.copyWithCount(toPlace));
-            stack.shrink(toPlace);
-        }
-
-        return stack;
     }
 }

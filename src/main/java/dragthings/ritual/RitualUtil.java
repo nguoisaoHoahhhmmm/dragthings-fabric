@@ -9,11 +9,14 @@ public final class RitualUtil {
     private RitualUtil() {}
 
     public static void shrinkOrDiscard(ItemEntity entity, int amount) {
-        ItemStack stack = entity.getItem();
+        ItemStack stack = entity.getItem().copy();
         stack.shrink(amount);
         if (stack.isEmpty()) {
             entity.discard();
         } else {
+            // A COPY on purpose: setting the same stack object back does not
+            // mark the tracked data as changed, so clients would keep showing
+            // the old count.
             entity.setItem(stack);
             entity.setPickUpDelay(20);
         }
