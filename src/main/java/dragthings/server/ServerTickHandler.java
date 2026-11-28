@@ -13,6 +13,9 @@ public final class ServerTickHandler {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             DragItemHandler.tickCooldowns();
 
+            // Drop stale drag sessions (dead entity / disconnected player).
+            DragSessionRegistry.tick(DragRitualSupport::release);
+
             // Mining idle decay
             DragToolHandler.tickMiningDecay();
 

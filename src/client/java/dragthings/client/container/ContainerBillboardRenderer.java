@@ -14,13 +14,15 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import org.lwjgl.glfw.GLFW;
+
+import java.util.List;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * A billboard above a Chest / Trapped Chest / Barrel / Shulker Box item that
+ * A billboard above a Chest / Trapped Chest / Barrel / Shulker Box item (and a dragged Ender Chest) that
  * shows what is inside, as a 3x9 slot grid with item icons and counts.
  *
  * Shown for the container you are dragging (so you watch it fill up while it
@@ -76,7 +78,7 @@ public final class ContainerBillboardRenderer {
             appear = Math.max(0f, appear - dt / CLOSE_SECONDS);
         }
         if (shown == null || appear <= 0f) { if (appear <= 0f) shown = null; return; }
-        if (!shown.isAlive() || !ContainerUtil.isContainerItem(shown.getItem())) { reset(); return; }
+        if (!shown.isAlive() || !isPreviewable(shown.getItem())) { reset(); return; }
 
         float partial = ctx.tickCounter().getGameTimeDeltaPartialTick(false);
         Vec3 cam = ctx.camera().getPosition();
@@ -103,10 +105,15 @@ public final class ContainerBillboardRenderer {
     private static ItemEntity pickTarget(Minecraft mc) {
         if (cfg().requireShift && !isShiftDown(mc)) return null;
         ItemEntity dragged = ItemDragHandler.getDraggedItem();
-        if (dragged != null) return ContainerUtil.isContainerItem(dragged.getItem()) ? dragged : null;
+        if (dragged != null) return isPreviewable(dragged.getItem()) ? dragged : null;
         if (!cfg().showOnHover) return null;
         ItemEntity hovered = ItemDragHandler.getHoveredItem();
         return hovered != null && ContainerUtil.isContainerItem(hovered.getItem()) ? hovered : null;
+    }
+
+    /** Chests, barrels and shulker boxes; also a dragged Ender Chest (contents come from the server). */
+    private static boolean isPreviewable(ItemStack stack) {
+        return ContainerUtil.isContainerItem(stack) || EnderChestBillboardRenderer.isEnderChest(stack);
     }
 
     private static DragThingsConfig.ContainerPreviewConfig cfg() {
@@ -121,8 +128,15 @@ public final class ContainerBillboardRenderer {
 
     private static void readContents(ItemStack container, long nowMs) {
         NonNullList<ItemStack> slots = emptySlots();
-        ItemContainerContents contents = container.get(DataComponents.CONTAINER);
-        if (contents != null) contents.copyInto(slots);
+        if (EnderChestBillboardRenderer.isEnderChest(container)) {
+            List<ItemStack> ender = EnderChestBillboardRenderer.contents();
+            if (ender != null) {
+                for (int i = 0; i < slots.size() && i < ender.size(); i++) slots.set(i, ender.get(i));
+            }
+        } else {
+            ItemContainerContents contents = container.get(DataComponents.CONTAINER);
+            if (contents != null) contents.copyInto(slots);
+        }
 
         if (previous != null) {
             for (int i = 0; i < slots.size(); i++) {

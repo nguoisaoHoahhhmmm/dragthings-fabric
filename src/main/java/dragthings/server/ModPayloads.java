@@ -5,6 +5,7 @@ import dragthings.network.ArmStatePayload;
 import dragthings.network.BundleEjectPayload;
 import dragthings.network.DragItemPayload;
 import dragthings.network.EatItemPayload;
+import dragthings.network.EnderChestSyncPayload;
 import dragthings.network.MobDragPayload;
 import dragthings.network.PlaceBlockPayload;
 import dragthings.network.RitualProgressPayload;
@@ -27,5 +28,6 @@ public final class ModPayloads {
         // Server -> Client
         PayloadTypeRegistry.playS2C().register(RitualProgressPayload.TYPE, RitualProgressPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ArmStatePayload.TYPE, ArmStatePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(EnderChestSyncPayload.TYPE, EnderChestSyncPayload.CODEC);
     }
 }

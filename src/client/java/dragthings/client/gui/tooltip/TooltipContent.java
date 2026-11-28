@@ -55,7 +55,12 @@ public final class TooltipContent {
                     .append(Component.literal(" x" + stack.getCount()).withStyle(ChatFormatting.GRAY));
         }
 
-        boolean isContainer = dragthings.ContainerUtil.isContainerItem(stack);
+        // Things with a contents preview: chests, barrels, shulker boxes and bundles
+        // (shown on hover or drag with Shift), and the ender chest (drag + Shift only,
+        // its contents come from the server).
+        boolean isContainer = dragthings.ContainerUtil.isContainerItem(stack)
+                || stack.getItem() instanceof net.minecraft.world.item.BundleItem;
+        boolean isEnderChest = stack.is(net.minecraft.world.item.Items.ENDER_CHEST);
         FoodProperties food = stack.get(DataComponents.FOOD);
         boolean isFood = food != null;
 
@@ -72,6 +77,9 @@ public final class TooltipContent {
             // so the full slot list replaces it.
             // The contents are shown by the container billboard (Shift), not in the tooltip.
             if (!shiftPressed) hint = dim("[Shift] for contents");
+        } else if (isEnderChest) {
+            // No preview when only hovering: it needs the drag so the server can send the contents.
+            if (!shiftPressed) hint = dim("Drag + [Shift] for contents");
         } else if (hasExtra) {
             if (shiftPressed) body = new ArrayList<>(vanilla.subList(1, vanilla.size()));
             else hint = dim("[Shift] for description");

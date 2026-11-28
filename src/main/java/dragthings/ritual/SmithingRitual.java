@@ -108,7 +108,7 @@ public final class SmithingRitual {
                         level.playSound(null, table.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.5f, 1.6f);
                         level.sendParticles(ParticleTypes.ELECTRIC_SPARK, table.getX(), table.getY()+0.3, table.getZ(), 24, 0.35, 0.25, 0.35, 0.02);
                         level.sendParticles(ParticleTypes.HAPPY_VILLAGER, table.getX(), table.getY()+0.5, table.getZ(), 8, 0.25, 0.25, 0.25, 0.0);
-                        Dragthings.LOGGER.info("Smithing ritual: {} (table #{})", result.getHoverName().getString(), table.getId());
+                        Dragthings.LOGGER.debug("Smithing ritual: {} (table #{})", result.getHoverName().getString(), table.getId());
                         return true;
                     }
                 }

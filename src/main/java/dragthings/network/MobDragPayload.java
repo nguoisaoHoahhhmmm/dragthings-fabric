@@ -40,7 +40,7 @@ public record MobDragPayload(
     }
 
     public static final CustomPacketPayload.Type<MobDragPayload> TYPE =
-            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("physicitem", "drag_mob"));
+            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("dragthings", "drag_mob"));
 
     public static final StreamCodec<FriendlyByteBuf, MobDragPayload> CODEC =
             StreamCodec.of(MobDragPayload::write, MobDragPayload::read);

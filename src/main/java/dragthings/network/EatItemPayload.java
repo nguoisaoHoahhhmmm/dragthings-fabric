@@ -18,7 +18,7 @@ public record EatItemPayload(
 ) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<EatItemPayload> TYPE =
-            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("physicitem", "eat_item"));
+            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("dragthings", "eat_item"));
 
     public static final StreamCodec<FriendlyByteBuf, EatItemPayload> CODEC =
             StreamCodec.of(EatItemPayload::write, EatItemPayload::read);

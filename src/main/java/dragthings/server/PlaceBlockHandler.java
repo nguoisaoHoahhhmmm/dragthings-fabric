@@ -48,13 +48,16 @@ public final class PlaceBlockHandler {
                     BlockPos pos = payload.blockPos();
                     double distSq = player.distanceToSqr(
                             pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-                    if (distSq > DragConstants.MAX_DRAG_DISTANCE_SQ) {
+                    if (distSq > DragConstants.MAX_PLACE_REACH_SQ) {
                         Dragthings.LOGGER.warn("Player {} tried to place block too far away ({} blocks²)",
                                 player.getName().getString(), (int) distSq);
                         return;
                     }
 
                     // 3. Source must be an ItemEntity holding a BlockItem
+                    // The source must be an entity this player is actually
+                    // dragging — not any item lying within reach.
+                    if (DragSessionRegistry.getOwned(payload.entityId(), player) == null) return;
                     Entity entity = sl.getEntity(payload.entityId());
                     if (!(entity instanceof ItemEntity itemEntity)) return;
                     if (!(itemEntity.getItem().getItem() instanceof BlockItem blockItem)) return;
@@ -68,8 +71,12 @@ public final class PlaceBlockHandler {
                         stack.remove(DataComponents.CUSTOM_MODEL_DATA);
                     }
 
-                    Vec3 hitVec = Vec3.atLowerCornerOf(pos).add(
-                            payload.hitX(), payload.hitY(), payload.hitZ());
+                    // hit offsets are client-supplied; keep them inside the
+                    // block to avoid impossible placement positions.
+                    float hitX = clamp01(payload.hitX());
+                    float hitY = clamp01(payload.hitY());
+                    float hitZ = clamp01(payload.hitZ());
+                    Vec3 hitVec = Vec3.atLowerCornerOf(pos).add(hitX, hitY, hitZ);
                     BlockHitResult serverHit = new BlockHitResult(hitVec, payload.face(), pos, false);
                     BlockPlaceContext ctx = new BlockPlaceContext(
                             sl, player, InteractionHand.MAIN_HAND, stack, serverHit);
@@ -122,8 +129,17 @@ public final class PlaceBlockHandler {
                         itemEntity.noPhysics = false;
                     }
 
+                    // The client does not send a drag-release packet when it
+                    // places a block, so close the server session here too.
+                    DragItemHandler.cleanupWithoutThrow(player, payload.entityId());
+
                     Dragthings.LOGGER.debug("Server placed {} @ {} for player {}",
                             state.getBlock(), pos, player.getName().getString());
                 }));
+    }
+
+    private static float clamp01(float value) {
+        if (!Float.isFinite(value)) return 0.5f;
+        return Math.max(0.0f, Math.min(1.0f, value));
     }
 }

@@ -15,7 +15,7 @@ public record BundleEjectPayload(int entityId, boolean all) implements CustomPac
 
     public static final CustomPacketPayload.Type<BundleEjectPayload> TYPE =
             new CustomPacketPayload.Type<>(
-                    ResourceLocation.fromNamespaceAndPath("physicitem", "bundle_eject"));
+                    ResourceLocation.fromNamespaceAndPath("dragthings", "bundle_eject"));
 
     public static final StreamCodec<FriendlyByteBuf, BundleEjectPayload> CODEC =
             StreamCodec.of(

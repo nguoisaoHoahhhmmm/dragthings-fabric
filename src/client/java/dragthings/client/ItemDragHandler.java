@@ -417,20 +417,22 @@ public class ItemDragHandler {
                         }
 
                         if (stuckTicks > STUCK_TICKS_THRESHOLD) {
-                            // Trigger the catch-up: instead of resolving one
-                            // full teleport this tick, spend the next few
-                            // ticks easing most of the remaining gap closed
-                            // each tick (intentionally skipping collision
-                            // resolution here too, same as before, so it can
-                            // cut back through geometry it fell behind).
+                            // Ease the gap closed over a few ticks. Movement
+                            // still goes through resolveBlockCollision, so a
+                            // follower can never phase back through a wall.
                             catchupTicks = CATCHUP_DURATION_TICKS;
                             stuckTicks = 0;
                         }
                     }
 
+                    boolean wasCatchup = catchupTicks > 0;
                     Vec3 newFPos;
-                    if (catchupTicks > 0) {
-                        newFPos = fPos.add(fTo.subtract(fPos).scale(GameplayConfig.physics().getFollowerCatchupSpeed()));
+                    if (wasCatchup) {
+                        Vec3 target = fPos.add(fTo.subtract(fPos)
+                                .scale(GameplayConfig.physics().getFollowerCatchupSpeed()));
+                        // Catch-up is faster, but still swept — followers must
+                        // not teleport back through walls.
+                        newFPos = resolveBlockCollision(client, followerPos.get(fi), target);
                         catchupTicks--;
                     } else {
                         newFPos = resolveBlockCollision(client, followerPos.get(fi), fTo);
@@ -438,10 +440,7 @@ public class ItemDragHandler {
                     followerStuck.set(fi, stuckTicks);
                     followerCatchupTicks.set(fi, catchupTicks);
 
-                    // Catch-up hops intentionally cut through geometry, so
-                    // they're not a real "impact" — only score a collision
-                    // when it came from the normal resolveBlockCollision path.
-                    double fImpactMag = (catchupTicks == 0) ? fTo.subtract(newFPos).length() : 0.0;
+                    double fImpactMag = wasCatchup ? 0.0 : fTo.subtract(newFPos).length();
                     ItemSquashStretchHandler.tick(follower, fVel, fImpactMag > 0.02, fImpactMag);
 
                     followerPos.set(fi, newFPos);
@@ -504,8 +503,11 @@ public class ItemDragHandler {
             return;
         }
 
-        Vec3 throwVelocity;
-        if (avgSpeed > 0.003) {
+        Vec3 throwVelocity = Vec3.ZERO;
+        // gravityOnRelease = false means "drop it, don't fling it" — gravity
+        // itself must still come back or rituals would keep seeing this item
+        // as dragged (they detect noGravity && noPhysics).
+        if (GameplayConfig.physics().gravityOnRelease && avgSpeed > 0.003) {
             throwVelocity = avgVelocity.scale(GameplayConfig.physics().getThrowMultiplier());
             double throwSpeed = throwVelocity.length();
             double cappedSpeed = throwSpeed <= 0.6
@@ -514,21 +516,17 @@ public class ItemDragHandler {
             throwVelocity = throwSpeed > 0.001
                     ? throwVelocity.normalize().scale(Math.min(cappedSpeed, 1.4))
                     : Vec3.ZERO;
-        } else {
-            throwVelocity = Vec3.ZERO;
         }
 
         draggedItem.setDeltaMovement(throwVelocity);
         draggedItem.noPhysics = false;
 
-        if (GameplayConfig.physics().gravityOnRelease || throwVelocity.length() > 0.01) {
-            draggedItem.setNoGravity(true);
-            pendingReleaseItem     = draggedItem;
-            pendingReleaseVelocity = throwVelocity;
-        } else {
-            draggedItem.setNoGravity(true);
-            pendingReleaseItem = null;
-        }
+        // Always restore gravity on the next tick, in every branch. Leaving
+        // noGravity set forever made items hang in mid-air on the client while
+        // the server already let them fall.
+        draggedItem.setNoGravity(true);
+        pendingReleaseItem     = draggedItem;
+        pendingReleaseVelocity = throwVelocity;
 
         if (cfg.enableParticles) {
             int burstCount = avgSpeed > 0.05 ? 10 : 5;
@@ -688,44 +686,59 @@ public class ItemDragHandler {
         );
     }
 
+    /** Vanilla item entities are 0.25 wide. */
+    private static final double ITEM_COLLISION_RADIUS = 0.125;
+    /** Long moves are split so a fast drag cannot tunnel through thin blocks. */
+    private static final double COLLISION_STEP = 0.4;
+
     public static Vec3 resolveBlockCollision(Minecraft client, Vec3 from, Vec3 to) {
-        final double ITEM_R = 0.125;
-        final double SKIN   = 0.001;
+        if (client.level == null || client.player == null) return to;
+        Vec3 movement = to.subtract(from);
+        if (movement.lengthSqr() < 1.0e-8) return from;
+
+        int steps = Math.max(1, (int) Math.ceil(movement.length() / COLLISION_STEP));
+        Vec3 current = from;
+        for (int i = 1; i <= steps; i++) {
+            Vec3 next = from.add(movement.scale((double) i / steps));
+            current = resolveCollisionStep(client, current, next);
+        }
+        return current;
+    }
+
+    private static Vec3 resolveCollisionStep(Minecraft client, Vec3 from, Vec3 to) {
+        final double SKIN = 0.001;
 
         AABB itemBox = new AABB(
-                from.x - ITEM_R, from.y - ITEM_R, from.z - ITEM_R,
-                from.x + ITEM_R, from.y + ITEM_R, from.z + ITEM_R
+                from.x - ITEM_COLLISION_RADIUS, from.y - ITEM_COLLISION_RADIUS, from.z - ITEM_COLLISION_RADIUS,
+                from.x + ITEM_COLLISION_RADIUS, from.y + ITEM_COLLISION_RADIUS, from.z + ITEM_COLLISION_RADIUS
         );
 
         Vec3 movement = to.subtract(from);
-
         AABB sweepBox = itemBox.expandTowards(movement).inflate(SKIN);
 
         List<VoxelShape> shapes = new ArrayList<>();
-        client.level.getBlockCollisions(null, sweepBox).forEach(shapes::add);
+        // Pass the real player so entity-sensitive collisions are respected.
+        client.level.getBlockCollisions(client.player, sweepBox).forEach(shapes::add);
 
         double mx = net.minecraft.world.phys.shapes.Shapes.collide(
                 net.minecraft.core.Direction.Axis.X, itemBox, shapes, movement.x);
         if (Math.abs(mx - movement.x) > SKIN) {
             currentVelocity = new Vec3(0, currentVelocity.y, currentVelocity.z);
-            itemBox = itemBox.move(mx, 0, 0);
-        } else {
-            itemBox = itemBox.move(mx, 0, 0);
         }
+        itemBox = itemBox.move(mx, 0, 0);
 
         double my = net.minecraft.world.phys.shapes.Shapes.collide(
                 net.minecraft.core.Direction.Axis.Y, itemBox, shapes, movement.y);
         if (Math.abs(my - movement.y) > SKIN) {
             currentVelocity = new Vec3(currentVelocity.x, 0, currentVelocity.z);
-            itemBox = itemBox.move(0, my, 0);
-        } else {
-            itemBox = itemBox.move(0, my, 0);
         }
+        itemBox = itemBox.move(0, my, 0);
 
         double mz = net.minecraft.world.phys.shapes.Shapes.collide(
                 net.minecraft.core.Direction.Axis.Z, itemBox, shapes, movement.z);
-        if (Math.abs(mz - movement.z) > SKIN)
+        if (Math.abs(mz - movement.z) > SKIN) {
             currentVelocity = new Vec3(currentVelocity.x, currentVelocity.y, 0);
+        }
 
         return from.add(mx, my, mz);
     }

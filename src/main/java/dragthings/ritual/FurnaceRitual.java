@@ -244,7 +244,7 @@ public final class FurnaceRitual {
         level.sendParticles(ParticleTypes.HAPPY_VILLAGER,
                 ingredient.getX(), ingredient.getY() + 0.5, ingredient.getZ(), 6, 0.2, 0.2, 0.2, 0.0);
 
-        Dragthings.LOGGER.info("Furnace ritual [{}]: {} -> {} (furnace #{})",
+        Dragthings.LOGGER.debug("Furnace ritual [{}]: {} -> {} (furnace #{})",
                 type.name(), input.getHoverName().getString(),
                 result.getHoverName().getString(), furnace.getId());
     }

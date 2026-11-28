@@ -3,6 +3,8 @@ package dragthings.ritual;
 import dragthings.Dragthings;
 import dragthings.config.GameplayConfig;
 import dragthings.config.RitualConfig;
+import dragthings.network.EnderChestSyncPayload;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
@@ -14,6 +16,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -54,12 +57,23 @@ public final class EnderChestRitual {
         boolean isNew = !activeChests.containsKey(entityId);
         activeChests.put(entityId, player);
         if (isNew) {
+            sendContents(player); // so the client can draw the contents preview
             var e = level.getEntity(entityId);
             if (e instanceof ItemEntity chest) {
                 level.playSound(null, chest.blockPosition(),
                         SoundEvents.ENDER_CHEST_OPEN, SoundSource.BLOCKS, 0.4f, 1.1f);
             }
         }
+    }
+
+    /** Sends the player's ender chest contents to their client (preview billboard). */
+    private static void sendContents(ServerPlayer player) {
+        if (!ServerPlayNetworking.canSend(player, EnderChestSyncPayload.TYPE)) return;
+        var enderChest = player.getEnderChestInventory();
+        List<ItemStack> stacks = new ArrayList<>(enderChest.getContainerSize());
+        for (int i = 0; i < enderChest.getContainerSize(); i++) stacks.add(enderChest.getItem(i).copy());
+        Dragthings.LOGGER.debug("EnderChest sync -> {} ({} slots)", player.getName().getString(), stacks.size());
+        ServerPlayNetworking.send(player, new EnderChestSyncPayload(stacks));
     }
 
     public static void onRelease(int entityId) {
@@ -155,6 +169,7 @@ public final class EnderChestRitual {
 
         if (lootedAny) {
             enderChest.setChanged();
+            sendContents(player);
 
             level.playSound(null, chestEntity.blockPosition(),
                     SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f,

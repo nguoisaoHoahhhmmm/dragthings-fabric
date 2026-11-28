@@ -217,7 +217,7 @@ public final class EnchantRitual {
         level.playSound(null, table.blockPosition(), SoundEvents.ALLAY_AMBIENT_WITHOUT_ITEM, SoundSource.PLAYERS, 0.5f, 1.2f);
 
         broadcast(table, player, PHASE_DONE, 0);
-        Dragthings.LOGGER.info("Enchant ritual: {} at power {} for {} levels (table #{})",
+        Dragthings.LOGGER.debug("Enchant ritual: {} at power {} for {} levels (table #{})",
                 targetStack.getHoverName().getString(), enchantPower(), creative ? 0 : levelCost(), table.getId());
     }
 

@@ -13,9 +13,11 @@
 
 # ABOUT
 
-One thing I've always liked in games like Half-Life, R.E.P.O, Dead Rails, and A Dusty Trip is how you can grab and move objects naturally. It's a small feature, but it makes interacting with the world feel much more engaging.
+I've always liked how games like Half-Life, R.E.P.O, Dead Rails, and A Dusty Trip let you pick up and move objects around.
 
-Drag Things adds a similar mechanic to Minecraft, allowing you to grab and drag dropped items with your mouse while keeping the gameplay simple and lightweight.
+I wanted to bring something similar to Minecraft, so I made Drag Things.
+
+With this mod, you can grab dropped items, move them around, throw them, and interact with the world in a different way. It also adds a few extra features to make these interactions more useful.
 
 ![Divider](https://cdn.modrinth.com/data/cached_images/d33b5cad4268c366f6a01d3c99a578e1a61adadd.png)
 
@@ -28,7 +30,7 @@ Drag Things adds a similar mechanic to Minecraft, allowing you to grab and drag 
 - **Interactive Dragging:** Hold **Right Click** to grab dropped items or blocks, then move them by looking around.
 - **Throwing:** Flick your mouse and release **Right Click** to throw an item. The throwing force depends on your movement.
 - **Weight System:** Different items have different weights. Heavy objects like anvils move more slowly, while lighter items are easier to handle. Item weights can be customized through Cloth Config.
-- **Multi-Drag:** Chain up to **8 items** together and move them as a group.
+- **Multi-Drag:** Chain up to **3 items** together and move them as a group (adjustable in `physics.json`).
 - **Block Placement:** Drag a placeable block onto a surface, then release to place it directly into the world.
 
 ## Automated Rituals & Block Functions
@@ -59,7 +61,7 @@ Supports both **Fortune** and **Silk Touch**.
 
 - **Pick Up & Move:** Look at a dropped item, then hold **Right Click** to grab it. Move your camera to drag it around.
 - **Throw:** Flick your camera and release **Right Click** to throw the item. The faster you move, the farther it goes.
-- **Chain Items (Multi-Drag):** While dragging an item, look at another item and press **G** *(default keybind, configurable in Controls)* to chain them together. You can chain up to **8 items**.
+- **Chain Items (Multi-Drag):** While dragging an item, look at another item and press **G** *(default keybind, configurable in Controls)* to chain them together. You can chain up to **3 items**.
 - **Place Blocks:** Drag a placeable block onto a solid surface, then release **Right Click** to place it.
 
 If you're not sure how something works, take a look at the videos in the **Gallery** section.
@@ -80,7 +82,7 @@ If you're not sure how something works, take a look at the videos in the **Galle
 
 To run Drag Things smoothly, please ensure you have the following mods installed:
 1. [Fabric API](https://modrinth.com/mod/fabric-api): Core dependency. The mod will not launch without it. 
-2. [Cloth Config API](https://modrinth.com/mod/cloth-config): Required to load and save your custom configuration (like item weights). 
+2. [Cloth Config API](https://modrinth.com/mod/cloth-config): Bundled inside the jar; you do not need to install it separately. 
 3. [Mod Menu](https://modrinth.com/mod/modmenu): (Highly Recommended) Allows you to open the configuration screen directly in-game to rebind keys and adjust settings.
 
 You can definitely have other things to improve the visual:

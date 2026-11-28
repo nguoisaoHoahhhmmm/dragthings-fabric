@@ -2,6 +2,7 @@ package dragthings.tool;
 
 import dragthings.Dragthings;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelEventPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -34,13 +35,15 @@ public final class ToolMining {
     public static final class MiningProgress {
         public final ServerLevel level;
         public final BlockPos    pos;
+        /** Kept so idle decay can clear the crack on the right client. */
+        public ServerPlayer breaker;
         public int   breakerId;
         /** 0..1, the block breaks at 1. */
         public float progress  = 0f;
         public int   idleTicks = 0;
 
-        public MiningProgress(ServerLevel l, BlockPos p, int id) {
-            level = l; pos = p; breakerId = id;
+        public MiningProgress(ServerLevel l, BlockPos p, ServerPlayer breaker) {
+            level = l; pos = p; this.breaker = breaker; breakerId = breaker.getId();
         }
     }
 
@@ -80,21 +83,46 @@ public final class ToolMining {
 
         String key = mineKey(sl, bp);
         MiningProgress mp = BLOCK_MINING.computeIfAbsent(
-                key, k -> new MiningProgress(sl, bp, player.getId()));
-        mp.breakerId = player.getId();
+                key, k -> new MiningProgress(sl, bp, player));
+        if (mp.breaker != player) {
+            // Two players hitting the same block: clear the old crack first.
+            clearCrack(mp.level, mp.breaker, mp.breakerId, bp);
+            mp.breaker = player;
+            mp.breakerId = player.getId();
+        }
         mp.idleTicks = 0;
 
         double swingScale = Math.min(MAX_SWING_SCALE, moved / MIN_MOVE); // big sweeps count more
         mp.progress += (float) swingScale / swingsNeeded;
 
         if (mp.progress >= 1f) {
-            sl.destroyBlockProgress(mp.breakerId, bp, -1);
+            showCrack(sl, player, bp, -1);
             BLOCK_MINING.remove(key);
             breakBlock(sl, player, item, bp, bs, canHarvest);
         } else {
-            int stage = Math.min(8, (int) (mp.progress * 9f));
-            sl.destroyBlockProgress(mp.breakerId, bp, stage);
+            // Vanilla uses stages 0..9; 9 is the "almost broken" overlay.
+            int stage = Math.min(9, (int) (mp.progress * 10f));
+            showCrack(sl, player, bp, stage);
             sl.playSound(null, bp, bs.getSoundType().getHitSound(), SoundSource.BLOCKS, 0.5f, 1f);
+        }
+    }
+
+    /**
+     * ServerLevel.destroyBlockProgress deliberately skips the breaker because
+     * a normal vanilla client predicts its own cracks. Dragged mining has no
+     * such prediction, so the breaker needs the packet too.
+     */
+    private static void showCrack(ServerLevel sl, ServerPlayer breaker, BlockPos bp, int stage) {
+        sl.destroyBlockProgress(breaker.getId(), bp, stage); // everyone else
+        if (breaker.connection != null && !breaker.isRemoved()) {
+            breaker.connection.send(new ClientboundBlockDestructionPacket(breaker.getId(), bp, stage));
+        }
+    }
+
+    private static void clearCrack(ServerLevel sl, ServerPlayer breaker, int id, BlockPos bp) {
+        sl.destroyBlockProgress(id, bp, -1);
+        if (breaker != null && !breaker.isRemoved() && breaker.connection != null) {
+            breaker.connection.send(new ClientboundBlockDestructionPacket(id, bp, -1));
         }
     }
 
@@ -156,7 +184,7 @@ public final class ToolMining {
         while (it.hasNext()) {
             MiningProgress mp = it.next().getValue();
             if (++mp.idleTicks >= IDLE_RESET) {
-                mp.level.destroyBlockProgress(mp.breakerId, mp.pos, -1);
+                clearCrack(mp.level, mp.breaker, mp.breakerId, mp.pos);
                 it.remove();
             }
         }

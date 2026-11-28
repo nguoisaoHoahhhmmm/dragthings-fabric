@@ -1,5 +1,6 @@
 package dragthings.client.particle;
 
+import dragthings.Dragthings;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -95,7 +96,7 @@ public class ParticleProfileManager implements SimpleSynchronousResourceReloadLi
         loaded.sort(Comparator.comparingInt((ParticleProfile p) -> p.priority).reversed());
         this.profiles = loaded;
 
-        System.out.println("[dragthings] Loaded " + loaded.size() + " particle profile(s)");
+        Dragthings.LOGGER.info("Loaded {} particle profile(s)", loaded.size());
     }
 
     /** Specific match first, falls back to whichever item_default profile sorts first. */

@@ -36,19 +36,19 @@ public final class RitualConfig {
 
     public static final class Grindstone {
         public boolean enabled = true;
-        public double radius = 2;
+        public double radius = 1;
         public int cooldownTicks = 20;
     }
 
     public static final class Furnace {
         public boolean enabled = true;
-        public double radius = 2;
+        public double radius = 1;
         public int fuelSearchCooldownTicks = 10; // 5-60
     }
 
     public static final class Anvil {
         public boolean enabled = true;
-        public double radius = 2;
+        public double radius = 1;
         public int cooldownTicks = 30;
         /** Raw XP per enchantment level or repair step (about 7 = one vanilla level). */
         public int xpPerLevel = 7;       // 1-20

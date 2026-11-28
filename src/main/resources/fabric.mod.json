@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "dragthings",
-	"version": "0.6.1",
+	"version": "0.6.2",
 	"name": "Drag Things",
 	"accessWidener": "dragthings.accesswidener",
 	"description": "Adds interactive drag physics to Minecraft — pull, move, and struggle with everything.",

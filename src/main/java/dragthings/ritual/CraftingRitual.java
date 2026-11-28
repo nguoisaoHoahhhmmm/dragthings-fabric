@@ -136,7 +136,7 @@ public final class CraftingRitual {
             }
             RitualUtil.spawnResult(level, table, result);
             effects(level, table);
-            Dragthings.LOGGER.info("Crafting ritual: {} (table #{})", result.getHoverName().getString(), table.getId());
+            Dragthings.LOGGER.debug("Crafting ritual: {} (table #{})", result.getHoverName().getString(), table.getId());
             return true;
         }
         return false;

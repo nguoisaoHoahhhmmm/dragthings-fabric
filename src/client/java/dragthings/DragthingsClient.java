@@ -25,9 +25,11 @@ public class DragthingsClient implements ClientModInitializer {
         MobDragTooltipRenderer.init();
         EatDrinkHandler.init();
         ContainerBillboardRenderer.init();
+        BundleBillboardRenderer.init();
+        EnderChestBillboardRenderer.init();
         ParticleManager.registerParticles();
         DragArmRenderer.init();
         BundleEjectKey.init();
-        System.out.println("[DragThings] Initialized!");
+        Dragthings.LOGGER.info("Client initialized");
     }
 }

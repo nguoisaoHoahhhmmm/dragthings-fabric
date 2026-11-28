@@ -130,7 +130,7 @@ public final class AnvilRitual {
                 level.sendParticles(ParticleTypes.CRIT,
                         baseEntity.getX(), baseEntity.getY() + 0.2, baseEntity.getZ(), 8, 0.2, 0.2, 0.2, 0.02);
 
-                Dragthings.LOGGER.info("Anvil ritual: {} -> {} (cost={} lvl, anvil #{})",
+                Dragthings.LOGGER.debug("Anvil ritual: {} -> {} (cost={} lvl, anvil #{})",
                         base.getHoverName().getString(), result.output.getHoverName().getString(),
                         result.xpCost, anvil.getId());
                 return true;

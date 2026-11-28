@@ -38,7 +38,7 @@ public record DragItemPayload(
     }
 
     public static final CustomPacketPayload.Type<DragItemPayload> TYPE =
-            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("physicitem", "drag_item"));
+            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("dragthings", "drag_item"));
 
     public static final StreamCodec<FriendlyByteBuf, DragItemPayload> CODEC =
             StreamCodec.of(DragItemPayload::write, DragItemPayload::read);

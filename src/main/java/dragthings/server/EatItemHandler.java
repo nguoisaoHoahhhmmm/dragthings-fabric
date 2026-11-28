@@ -2,8 +2,10 @@ package dragthings.server;
 
 import dragthings.Dragthings;
 import dragthings.network.EatItemPayload;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -16,26 +18,40 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.PotionContents;
 
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 /** Server handling for EatItemPayload: eating / drinking a dragged item. */
 public final class EatItemHandler {
 
     private EatItemHandler() {}
 
-    /** Same 12-block limit as the client's MAX_DRAG_DIST (squared). */
-    private static final double MAX_EAT_DISTANCE_SQ = 144.0;
+    private static final int EAT_COOLDOWN_TICKS = 10;
+    private static final Map<UUID, Long> lastEatTick = new ConcurrentHashMap<>();
 
     public static void register() {
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+                lastEatTick.remove(handler.player.getUUID()));
+
         ServerPlayNetworking.registerGlobalReceiver(EatItemPayload.TYPE, (payload, context) ->
                 context.server().execute(() -> {
                     ServerPlayer player = context.player();
                     if (player == null || player.level() == null) return;
 
-                    Entity entity = player.level().getEntity(payload.entityId());
+                    if (!(player.level() instanceof ServerLevel level)) return;
+                    if (DragSessionRegistry.getOwned(payload.entityId(), player) == null) return;
+
+                    Entity entity = level.getEntity(payload.entityId());
                     if (!(entity instanceof ItemEntity itemEntity) || !itemEntity.isAlive()) return;
+
+                    long now = level.getGameTime();
+                    Long last = lastEatTick.get(player.getUUID());
+                    if (last != null && now - last < EAT_COOLDOWN_TICKS) return;
 
                     double distSq = player.distanceToSqr(
                             itemEntity.getX(), itemEntity.getY(), itemEntity.getZ());
-                    if (distSq > MAX_EAT_DISTANCE_SQ) {
+                    if (distSq > DragConstants.MAX_EAT_REACH_SQ) {
                         Dragthings.LOGGER.warn("Player {} tried to eat/drink an item too far away ({} blocks²)",
                                 player.getName().getString(), (int) distSq);
                         return;
@@ -43,10 +59,15 @@ public final class EatItemHandler {
 
                     ItemStack stack = itemEntity.getItem();
                     if (!consume(player, itemEntity, stack)) return;
+                    lastEatTick.put(player.getUUID(), now);
 
                     stack.shrink(1);
                     if (stack.isEmpty()) itemEntity.discard();
                     else itemEntity.setItem(stack);
+
+                    // Eating is an action on its own; stop tracking this drag
+                    // so an abandoned session cannot keep the item floating.
+                    DragItemHandler.cleanupWithoutThrow(player, payload.entityId());
                 }));
     }
 

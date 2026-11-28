@@ -27,7 +27,7 @@ public record RitualProgressPayload(
 ) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<RitualProgressPayload> TYPE =
-            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("physicitem", "ritual_progress"));
+            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("dragthings", "ritual_progress"));
 
     public static final StreamCodec<FriendlyByteBuf, RitualProgressPayload> CODEC =
             StreamCodec.of(RitualProgressPayload::write, RitualProgressPayload::read);

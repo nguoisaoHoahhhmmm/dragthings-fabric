@@ -50,7 +50,9 @@ public record PlaceBlockPayload(
     private static PlaceBlockPayload read(FriendlyByteBuf buf) {
         int       entityId = buf.readInt();
         BlockPos  blockPos = buf.readBlockPos();
-        Direction face     = Direction.values()[buf.readByte()];
+        int faceIndex      = buf.readByte() & 0xFF;
+        Direction[] faces  = Direction.values();
+        Direction face     = faceIndex < faces.length ? faces[faceIndex] : Direction.UP;
         float     hitX     = buf.readFloat();
         float     hitY     = buf.readFloat();
         float     hitZ     = buf.readFloat();

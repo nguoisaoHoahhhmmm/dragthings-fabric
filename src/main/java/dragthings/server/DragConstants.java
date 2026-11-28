@@ -17,5 +17,15 @@ public final class DragConstants {
      */
     public static final double MAX_DRAG_DISTANCE_SQ = 24.0 * 24.0;
 
+    /**
+     * Placing a block is an intentional interaction with a block face, not a
+     * continuation of the drag, so it uses vanilla-ish reach instead of the
+     * generous chain distance above.
+     */
+    public static final double MAX_PLACE_REACH_SQ = 5.0 * 5.0;
+
+    /** Eating/drinking uses the same tight reach. */
+    public static final double MAX_EAT_REACH_SQ = 5.0 * 5.0;
+
     public static final double MAX_THROW_SPEED = 2.5;
 }

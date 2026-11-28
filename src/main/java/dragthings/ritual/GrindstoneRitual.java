@@ -131,7 +131,7 @@ public final class GrindstoneRitual {
             level.sendParticles(ParticleTypes.ENCHANT,
                     stone.getX(), stone.getY() + 0.5, stone.getZ(), 20, 0.3, 0.3, 0.3, 0.06);
 
-            Dragthings.LOGGER.info("Grindstone ritual: stripped {} (xp={}, stone #{})",
+            Dragthings.LOGGER.debug("Grindstone ritual: stripped {} (xp={}, stone #{})",
                     stack.getHoverName().getString(), xpReward, stone.getId());
             return true;
         }

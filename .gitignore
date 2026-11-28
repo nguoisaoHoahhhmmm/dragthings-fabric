@@ -4,7 +4,7 @@
 build/
 out/
 classes/
-
+CHANGELOG.md
 # eclipse
 
 *.launch
